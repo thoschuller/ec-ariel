@@ -1,0 +1,18 @@
+[project]
+name = "ariel"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "JMDM", email = "jmo.880@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mypy>=1.17.0",
+    "rich>=14.0.0",
+    "ruff>=0.12.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9"]
+build-backend = "uv_build"
