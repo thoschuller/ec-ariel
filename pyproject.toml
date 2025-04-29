@@ -9,6 +9,7 @@ dependencies = [
     "mujoco>=3.3.2",
     "mypy>=1.15.0",
     "numpy>=2.2.5",
+    "pydantic>=2.11.3",
     "pytest>=8.3.5",
     "rich>=14.0.0",
     "ruff>=0.11.7",
