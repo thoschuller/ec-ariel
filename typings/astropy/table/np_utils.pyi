@@ -1,0 +1,3 @@
+__all__ = ['TableMergeError']
+
+class TableMergeError(ValueError): ...
