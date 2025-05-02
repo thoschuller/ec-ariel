@@ -1,5 +1,5 @@
 """
-Hinge generator for the Robogen Lite module.
+Generator for the Robogen Lite 'Hinge' module.
 
 Author:     jmdm
 Date:       2025-05-02
@@ -36,24 +36,21 @@ from rich.traceback import install
 
 # Local libraries
 from revolve.body_phenotypes import BaseConfiguration
-from revolve.body_phenotypes.base_configuration import Dimensions, Units
+from revolve.body_phenotypes.base_configuration import (
+    Dimensions,
+    Units,
+)
 from revolve.body_phenotypes.robogen_lite.hinge import (
     HINGE_CONFIG_PATH,
     HINGE_XML_PATH,
 )
-
-BRICK_WEIGHT = 0.05901
-USE_DEGREES = False
-
-CWD = Path.cwd()
-SCRIPT_NAME = __file__.split("/")[-1][:-3]
-DATA = f"{CWD}/__data__"
-SEED = 42
+from revolve.body_phenotypes.robogen_lite.module import (
+    AttachmentDirections,
+    Module,
+)
 
 # Global functions
 console = Console()
-console_err = Console(stderr=True, style="bold red")
-RNG = np.random.default_rng(seed=SEED)
 
 # Global functions
 install(show_locals=True)
@@ -69,12 +66,17 @@ class HingeConfiguration(BaseModel):
     rotor: BaseConfiguration
 
 
-class Hinge:
+class Hinge(Module[HingeConfiguration]):
     """
     XML class for the Robogen Lite hinge.
 
     User isn't expected to change the default values defined here.
     """
+
+    # Configuration
+    config_path_obj: Path = HINGE_CONFIG_PATH
+    xml_path_obj: Path = HINGE_XML_PATH
+    base_model = HingeConfiguration
 
     # Names
     _hinge_name: str = "hinge"
@@ -103,41 +105,31 @@ class Hinge:
     _gainprm = np.zeros(10)
     _biasprm = np.zeros(10)
 
-    def __init__(self, hinge_config: HingeConfiguration) -> None:
-        """
-        Create a hinge module.
+    def set_class_attributes(self) -> None:
+        """Process and save object parameters."""
+        # Check if config is set
+        if self.config is None:
+            msg = "Hinge configuration not set!\n"
+            msg += "Please set the configuration using 'default_config()' or load a config file.\n"
+            raise ValueError(msg)
 
-        :param HingeConfiguration hinge_config: configuration object passed during initialisation.
-        """
-        # Parameters
-        self.set_parameters(hinge_config)
-
-        # Create MjSpec
-        self.define_specification()
-
-    def set_parameters(self, hinge_config: HingeConfiguration) -> None:
-        """
-        Process and save object parameters.
-
-        :param HingeConfiguration hinge_config: configuration object passed during initialisation.
-        """
         # Stator
-        self.stator_width = hinge_config.stator.dimensions.width
-        self.stator_depth = hinge_config.stator.dimensions.depth
-        self.stator_height = hinge_config.stator.dimensions.height
+        self.stator_width = self.config.stator.dimensions.width
+        self.stator_depth = self.config.stator.dimensions.depth
+        self.stator_height = self.config.stator.dimensions.height
 
         # Rotors
-        self.rotor_width = hinge_config.rotor.dimensions.width * self._shrink
-        self.rotor_depth = hinge_config.rotor.dimensions.depth * self._shrink
-        self.rotor_height = hinge_config.rotor.dimensions.height * self._shrink
+        self.rotor_width = self.config.rotor.dimensions.width * self._shrink
+        self.rotor_depth = self.config.rotor.dimensions.depth * self._shrink
+        self.rotor_height = self.config.rotor.dimensions.height * self._shrink
 
         # Masses
-        self.stator_mass = hinge_config.stator.mass
-        self.rotor_mass = hinge_config.rotor.mass
+        self.stator_mass = self.config.stator.mass
+        self.rotor_mass = self.config.rotor.mass
 
         # Colors
-        self.stator_color = hinge_config.stator.color
-        self.rotor_color = hinge_config.rotor.color
+        self.stator_color = self.config.stator.color
+        self.rotor_color = self.config.rotor.color
 
         # Derived parameters
         self.width = self.stator_width + self.rotor_width
@@ -146,12 +138,49 @@ class Hinge:
         self.dimensions = [self.width, self.height, self.depth]
 
         # Actuator parameters
-        kp = hinge_config.kp
-        kv = hinge_config.kv
+        kp = self.config.kp
+        kv = self.config.kv
         self._gainprm[0] = kp
         self._biasprm[:3] = [0, -kp, -kv]
 
-    def define_specification(self) -> None:
+    def config_generate(self) -> None:
+        """
+        Generate the default configuration.
+
+        Notes:
+            * I used Orca Slicer to get estimated weights and dimensions for the stator and rotor.
+            * The servo motor is assumed to be 55g (from the datasheet).
+            * I assume the weight of the servo motor is evenly distributed between the stator and rotor.
+
+        """
+        # Define units
+        units = Units(length="mm", mass="g")
+
+        # Hardware weight
+        servo_motor = 55
+
+        # Stator
+        s_dims = Dimensions(width=52.75, depth=54, height=52)
+        stator = BaseConfiguration(
+            mass=14.08 + (servo_motor / 2),
+            color=(0, 0.55, 0.88, 1),
+            dimensions=s_dims,
+            units=units,
+        )
+
+        # Rotor
+        r_dims = Dimensions(width=44.74, depth=52, height=52)
+        rotor = BaseConfiguration(
+            mass=11.32 + (servo_motor / 2),
+            color=(0, 0.25, 1, 1),
+            dimensions=r_dims,
+            units=units,
+        )
+
+        # Final configuration
+        self.config = HingeConfiguration(stator=stator, rotor=rotor)
+
+    def _create_mjspec(self) -> None:
         """Create the MuJoCo spec object."""
         # Root
         spec = mujoco.MjSpec()
@@ -199,6 +228,10 @@ class Hinge:
             mass=self.rotor_mass,
             pos=[self.rotor_width, 0, 0],
         )
+        rotor.add_site(
+            name=str(AttachmentDirections.FRONT.value),
+            pos=[self.rotor_width, 0, 0],
+        )
 
         # Contact exclusion
         spec.add_exclude(
@@ -223,103 +256,14 @@ class Hinge:
         self.spec: mujoco.MjSpec = spec
 
 
-def default_hinge_config() -> HingeConfiguration:
-    """
-    Generate the default configuration for the hinge module.
-
-    :return HingeConfiguration: default hinge configuration
-
-    Notes:
-        * I used Orca Slicer to get estimated weights and dimensions for the stator and rotor.
-        * The servo motor is assumed to be 55g (from the datasheet).
-        * I assume the weight of the servo motor is evenly distributed between the stator and rotor.
-
-    """
-    # Define units
-    units = Units(length="mm", mass="g")
-
-    # Hardware weight
-    servo_motor = 55
-
-    # Stator
-    s_dims = Dimensions(width=52.75, depth=54, height=52)
-    stator = BaseConfiguration(
-        mass=14.08 + (servo_motor / 2),
-        color=(0, 0.55, 0.88, 1),
-        dimensions=s_dims,
-        units=units,
-    )
-
-    # Rotor
-    r_dims = Dimensions(width=44.74, depth=52, height=52)
-    rotor = BaseConfiguration(
-        mass=11.32 + (servo_motor / 2),
-        color=(0, 0.25, 1, 1),
-        dimensions=r_dims,
-        units=units,
-    )
-
-    # Validate configuration
-    return HingeConfiguration(stator=stator, rotor=rotor)
-
-
-def default_hinge_config_dump_as_json() -> None:
-    """Save locally (to physical_parameters.jsonc) the default configuration for the hinge module."""
-    hinge_config = default_hinge_config()
-    config_fileobj = Path(HINGE_CONFIG_PATH)
-    config_fileobj.write_text(
-        data=hinge_config.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
-    console.log(hinge_config)
-    console.log(
-        f"[bold green] --> Saved hinge config to '{config_fileobj.name}' :white_check_mark:",
-    )
-
-
-def default_hinge_config_load_from_json() -> HingeConfiguration:
-    """Load locally defined (in physical_parameters.jsonc) default configuration for the hinge module."""
-    config_fileobj = Path(HINGE_CONFIG_PATH)
-    json_data = config_fileobj.read_text(encoding="utf-8")
-    hinge_config = HingeConfiguration.model_validate_json(json_data=json_data)
-    console.log(hinge_config)
-    return hinge_config
-
-
-def default_hinge() -> Hinge:
-    """Generate the default hinge module."""
-    hinge_config = default_hinge_config()
-    return Hinge(hinge_config)
-
-
-def default_hinge_dump_as_xml() -> None:
-    """Save locally (to hinge.xml) the default XML for the hinge module."""
-    hinge = default_hinge()
-    xml_str = hinge.spec.to_xml()
-    xml_fileobj = Path(HINGE_XML_PATH)
-    xml_fileobj.write_text(
-        data=xml_str,
-        encoding="utf-8",
-    )
-    console.log(xml_str)
-    console.log(
-        f"[bold green] --> Saved hinge XML to '{xml_fileobj.name}' :white_check_mark:",
-    )
-
-
-def default_hinge_load_as_xml() -> str:
-    """Load locally defined (in hinge.xml) default XML for the hinge module."""
-    xml_fileobj = Path(HINGE_XML_PATH)
-    xml_str = xml_fileobj.read_text(encoding="utf-8")
-    console.log(xml_str)
-    return xml_str
-
-
 def compile_hinge() -> None:
     """Compile the hinge module."""
     console.rule("START: Compile Hinge Module\n")
-    default_hinge_config_dump_as_json()
-    default_hinge_dump_as_xml()
+    hinge = Hinge()
+    hinge.config_generate()
+    hinge.config_dump_as_json()
+    hinge.create_mjspec()
+    hinge.dump_mjspec_as_xml()
     console.rule("END: Compile Hinge Module\n")
 
 

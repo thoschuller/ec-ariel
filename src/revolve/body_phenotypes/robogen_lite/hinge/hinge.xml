@@ -9,6 +9,7 @@
       <body name="rotor">
         <joint name="servo" pos="0 0 0" axis="0 0 1"/>
         <geom name="rotor" size="0.0447355 0.0519948 0.0519948" pos="0.0447355 0 0" type="box" mass="0.03882" rgba="0 0.25 1 1"/>
+        <site name="front" pos="0.0447355 0 0"/>
       </body>
     </body>
   </worldbody>
