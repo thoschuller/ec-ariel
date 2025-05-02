@@ -1,5 +1,5 @@
 """
-Test: src/revolve/body_phenotypes/robogen_lite.
+Test: src/revolve/body_phenotypes/robogen_lite (hinge).
 
 Author:     jmdm
 Date:       2025-04-30
@@ -49,19 +49,19 @@ def test_create_hinge_config() -> None:
 
 def test_default_hinge_config_dumping_and_loading() -> None:
     """Test the default hinge configuration dumping and loading."""
-    hinge = Hinge()
-    hinge.config_generate()
-    hinge.config_dump_as_json()
-    hinge.config_load_from_json()
+    body = Hinge()
+    body.config_generate()
+    body.config_dump_as_json()
+    body.config_load_from_json()
 
 
 def test_hinge_model_xml_dumping_and_loading() -> None:
     """Test the XML dumping and loading of hinge model."""
-    hinge = Hinge()
-    hinge.config_generate()
-    hinge.create_mjspec()
-    hinge.dump_mjspec_as_xml()
-    hinge.load_mjspec_from_xml()
+    body = Hinge()
+    body.config_generate()
+    body.create_mjspec()
+    body.dump_mjspec_as_xml()
+    body.load_mjspec_from_xml()
 
 
 def test_custom_hinge_config_dumping_and_loading() -> None:
@@ -82,27 +82,27 @@ def test_custom_hinge_config_dumping_and_loading() -> None:
         dimensions=r_dims,
         units=units,
     )
-    hinge_config = HingeConfiguration(stator=stator, rotor=rotor)
+    config = HingeConfiguration(stator=stator, rotor=rotor)
 
     # Hinge
-    hinge = Hinge()
-    hinge.config = hinge_config
-    hinge.create_mjspec()
-    hinge.spec.compile()
+    body = Hinge()
+    body.config = config
+    body.create_mjspec()
+    body.spec.compile()
 
 
 def test_generate_hinge_model_compile() -> None:
     """Test the compilation of hinge model."""
     # Hinge
-    hinge = Hinge()
-    hinge.config_generate()
-    hinge.create_mjspec()
+    body = Hinge()
+    body.config_generate()
+    body.create_mjspec()
 
     # World
     world = World()
     spawn_site = world.spec.worldbody.add_site()
     spawn_site.attach_body(
-        body=hinge.spec.worldbody,
+        body=body.spec.worldbody,
         prefix="child-",
         suffix="",
     )
