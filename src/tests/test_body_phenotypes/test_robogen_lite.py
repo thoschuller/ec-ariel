@@ -9,9 +9,6 @@ Py Ver:     3.12
 OS:         macOS  Sequoia 15.3.1
 Hardware:   M4 Pro
 
-Notes:
-    *
-
 Todo:
     [ ]
 
