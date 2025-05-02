@@ -1,7 +1,13 @@
-import json
+"""Robogen-Lite hinge."""
+
+# Standard library
 from pathlib import Path
 
-# Open json file and read into dict
-CD = Path(__file__).parent
-with (CD / "physical_parameters.jsonc").open() as f:
-    HINGE_PHYSICAL_PARAMS = json.load(f)
+# Global constants
+DEFAULT_CONFIG_NAME = "physical_parameters.jsonc"
+DEFAULT_XML_NAME = "hinge.xml"
+HINGE_CONFIG_PATH = Path(__file__).parent / DEFAULT_CONFIG_NAME
+HINGE_XML_PATH = Path(__file__).parent / DEFAULT_XML_NAME
+
+# Local libraries
+__all__ = ["HINGE_CONFIG_PATH"]

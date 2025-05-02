@@ -1,0 +1,42 @@
+{
+  "kp": 1.0,
+  "kv": 1.0,
+  "stator": {
+    "color": [
+      0.0,
+      0.55,
+      0.88,
+      1.0
+    ],
+    "units": {
+      "length": "m",
+      "mass": "kg"
+    },
+    "stl_filepath": "",
+    "mass": 0.04158,
+    "dimensions": {
+      "width": 0.05275,
+      "depth": 0.054,
+      "height": 0.052000000000000005
+    }
+  },
+  "rotor": {
+    "color": [
+      0.0,
+      0.25,
+      1.0,
+      1.0
+    ],
+    "units": {
+      "length": "m",
+      "mass": "kg"
+    },
+    "stl_filepath": "",
+    "mass": 0.03882,
+    "dimensions": {
+      "width": 0.04474,
+      "depth": 0.052000000000000005,
+      "height": 0.052000000000000005
+    }
+  }
+}
