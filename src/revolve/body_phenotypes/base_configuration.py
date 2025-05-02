@@ -29,110 +29,204 @@ Notes:
         Also, in Revolve 2 the units where going absolutely everywhere, this is the easiest and most elegant solution I could think of.
 
 Todo:
-    [ ]
+    [ ] move defaults into __init__?
 
 """
 
 # Standard library
+from copy import deepcopy
 from pathlib import Path
-from typing import Literal, Self
+from typing import Self
 
 # Third-party libraries
-from pydantic import BaseModel, model_validator
+from astropy import units as u
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    NonNegativeFloat,
+    field_validator,
+    model_validator,
+)
+from rich.traceback import install
+
+# Global constants
+MIN_WEIGHT = 1e-6
+MAX_WEIGHT = 1e6
+MIN_LENGTH = 1e-6
+MAX_LENGTH = 1e6
+
+_MASS_DEF_UNIT = u.si.kg
+MASS_DEF_UNIT = _MASS_DEF_UNIT.name
+_LENGTH_DEF_UNIT = u.si.m
+LENGTH_DEF_UNIT = _LENGTH_DEF_UNIT.name
+
+UNITS_OF_LENGTH = _LENGTH_DEF_UNIT.find_equivalent_units(
+    include_prefix_units=True,
+)
+UNITS_OF_MASS = _MASS_DEF_UNIT.find_equivalent_units(
+    include_prefix_units=True,
+)
+
+# Global functions
+install(show_locals=True)
 
 
 class Dimensions(BaseModel):
-    """Dimensions of bounding box."""
+    """Dimensions of bounding box (lengths) of a model."""
 
-    width: float
-    height: float
-    depth: float
+    # PyDantic configuration
+    model_config = ConfigDict(extra="forbid")
 
-
-class Shell(BaseModel):
-    """Description of 3D printed shell (for approximate weight calculation)."""
-
-    material: Literal["PLA", "Unknown"] = "PLA"
-    density: float = 1.25
-    weight: float
-    stl_filepath: str = ""
-
-    @model_validator(mode="after")
-    def file_exists(self) -> Self:
-        """Check that the STL file exists."""
-        # Check if file exists
-        if self.stl_filepath and not Path(self.stl_filepath).exists():
-            msg = f"Did not find the STL file at {self.stl_filepath=}!\n"
-            raise FileNotFoundError(msg)
-        return self
+    # Size of (bounding) box
+    width: NonNegativeFloat
+    depth: NonNegativeFloat
+    height: NonNegativeFloat
 
 
 class Units(BaseModel):
-    """Defines the allowed units (extending this requires an update in 'unit_conversion')."""
+    """Define units of model."""
 
-    dimensions: Literal["meters", "centimeters", "millimeters"] = "centimeters"
-    weight: Literal["kilograms", "grams"] = "grams"
-    density: Literal["kg/m3", "g/cm3"] = "g/cm3"
+    # PyDantic configuration
+    model_config = ConfigDict(extra="forbid")
+
+    # Allowed units
+    length: str = LENGTH_DEF_UNIT
+    mass: str = MASS_DEF_UNIT
+
+    @model_validator(mode="after")
+    def compatible_units(self) -> Self:
+        """
+        Ensure passed units are valid.
+
+        :raises ValueError: if the passed units for 'length' are not defined in astropy.
+        :raises ValueError: if the passed units for 'mass' are not defined in astropy.
+        :return Self: return self if there are no errors (standard pydantic syntax).
+        """
+        # Check length units
+        if self.length not in UNITS_OF_LENGTH:
+            msg = f"{self.length=} isn't a valid unit of length!"
+            raise ValueError(msg)
+
+        # Check mass units
+        if self.mass not in UNITS_OF_MASS:
+            msg = f"{self.mass=} isn't a valid unit of mass!"
+            raise ValueError(msg)
+        return self
 
 
 class BaseConfiguration(BaseModel):
-    """General required information."""
+    """A PyDantic model that defines the basic properties of model."""
 
-    weight: float
-    dimensions: Dimensions
-    shell: Shell
+    # PyDantic configuration
+    model_config = ConfigDict(extra="forbid")
 
+    # User defined
+    color: tuple[  # RGBA
+        NonNegativeFloat,
+        NonNegativeFloat,
+        NonNegativeFloat,
+        NonNegativeFloat,
+    ]
     units: Units
+    stl_filepath: str = ""
+
+    # Pre-conversion
+    mass: NonNegativeFloat
+    dimensions: Dimensions
+
+    @field_validator("units", mode="before")
+    @classmethod
+    def make_copy_of_units(cls, units: Units) -> Units:
+        """
+        Make a copy of the passed units (useful if the user wants to reuse arguments).
+
+        :param Units units: user defined units.
+        :return Units: a deep copy of the user defined 'Units' class.
+        """
+        return deepcopy(units)
+
+    @field_validator("units", mode="before")
+    @classmethod
+    def make_copy_of_dimensions(cls, dimensions: Dimensions) -> Dimensions:
+        """
+        Make a copy of the passed dimensions (useful if the user wants to reuse arguments).
+
+        :param Dimensions dimensions: user defined dimensions.
+        :return Dimensions: a deep copy of the user defined 'Dimensions' class.
+        """
+        return deepcopy(dimensions)
+
+    @field_validator("stl_filepath", mode="after")
+    @classmethod
+    def file_exists(cls, file_path: str) -> str:
+        """
+        Check if the STL file exists.
+
+        :param str file_path: path to the STL file.
+        :raises FileNotFoundError: if the STL file does not exist.
+        :return str: the STL file path.
+        """
+        if file_path and not Path(file_path).exists():
+            msg = f"Did not find the STL file at {file_path=}!\n"
+            raise FileNotFoundError(msg)
+        return file_path
 
     @model_validator(mode="after")
-    def unit_conversion(self) -> Self:
-        """Convert values to standard units."""
-        # Weight should be in kilograms.
-        match self.units.weight:
-            case "grams":
-                self.weight /= 1000
-                self.shell.weight /= 1000
-        self.units.weight = "kilograms"
+    def mass_to_si(self) -> Self:
+        """
+        Convert mass to SI units.
 
-        # Distances should be in centimeters.
-        match self.units.dimensions:
-            case "meters":
-                self.dimensions.width *= 100
-                self.dimensions.height *= 100
-                self.dimensions.depth *= 100
-            case "millimeters":
-                self.dimensions.width /= 10
-                self.dimensions.height /= 10
-                self.dimensions.depth /= 10
-        self.units.dimensions = "centimeters"
-
-        # Density should be in kilograms per meter cube.
-        match self.units.density:
-            case "g/cm3":
-                self.shell.density *= 1000
-        self.units.density = "kg/m3"
-
+        :return Self: return self if there are no errors (standard pydantic syntax).
+        """
+        mass_with_units = self.mass * getattr(u, self.units.mass)
+        self.units.mass = MASS_DEF_UNIT
+        self.mass = float(mass_with_units.to(MASS_DEF_UNIT).value)
         return self
 
     @model_validator(mode="after")
-    def sensible_values(self) -> Self:
-        """Check that all the values are within 'reasonable' ranges (based on my opinion lol)."""
-        # Check weight
-        min_weight = 1e-5
-        max_weight = 1e5
-        if not min_weight < self.weight < max_weight:
-            msg = f"\tExpected weight to be between {min_weight=} and {max_weight=}!\n"
-            msg += f"\tInstead got: {self.weight=}\n"
-            msg += "\tAre you sure you're using the correct units?\n"
-            raise ValueError(msg)
+    def dimensions_to_si(self) -> Self:
+        """
+        Convert dimensions to SI units.
 
-        # Check dimensions
-        min_dim = 1e-5
-        max_dim = 1e5
+        :return Self: return self if there are no errors (standard pydantic syntax).
+        """
         for dimension in self.dimensions.model_fields_set:
-            if not min_dim < getattr(self.dimensions, dimension) < max_dim:
-                msg = f"\tExpected weight to be between {min_dim=} and {max_dim=}!\n"
-                msg += f"\tInstead got: dimension={getattr(self.dimensions, dimension)}\n"
-                msg += "\tAre you sure you're using the correct units?\n"
+            dim = getattr(self.dimensions, dimension)
+            dim_with_units = dim * getattr(u, self.units.length)
+            setattr(
+                self.dimensions,
+                dimension,
+                float(dim_with_units.to(LENGTH_DEF_UNIT).value),
+            )
+        self.units.length = LENGTH_DEF_UNIT
+        return self
+
+    @model_validator(mode="after")
+    def check_mass(self) -> Self:
+        """
+        Check if mass is within limits.
+
+        :raises ValueError: if the mass is not within limits.
+        :return Self: return self if there are no errors (standard pydantic syntax).
+        """
+        if not (MIN_WEIGHT < self.mass < MAX_WEIGHT):
+            msg = f"Mass {self.mass=} is not within limits!\n"
+            msg += f"Mass should be between {MIN_WEIGHT} and {MAX_WEIGHT} kg!"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def check_dimensions(self) -> Self:
+        """
+        Check if dimensions are within limits.
+
+        :raises ValueError: if the dimensions are not within limits.
+        :return Self: return self if there are no errors (standard pydantic syntax).
+        """
+        for dimension in self.dimensions.model_fields_set:
+            dim = getattr(self.dimensions, dimension)
+            if not (MIN_LENGTH < dim < MAX_LENGTH):
+                msg = f"Dimension {dimension} {dim=} is not within limits!\n"
+                msg += f"Dimension should be between {MIN_LENGTH} and {MAX_LENGTH} m!"
                 raise ValueError(msg)
         return self
