@@ -9,9 +9,6 @@ Py Ver:     3.12
 OS:         macOS  Sequoia 15.3.1
 Hardware:   M4 Pro
 
-Notes:
-    *
-
 Todo:
     [ ]
 
@@ -26,8 +23,6 @@ from revolve.body_phenotypes.base_configuration import (
 from revolve.body_phenotypes.robogen_lite.hinge.generator import (
     Hinge,
     HingeConfiguration,
-    default_hinge_config_dump_as_json,
-    default_hinge_config_load_from_json,
 )
 from revolve.body_phenotypes.robogen_lite.world.generator import World
 
@@ -52,32 +47,63 @@ def test_create_hinge_config() -> None:
     HingeConfiguration(stator=stator, rotor=rotor)
 
 
-def test_default_hinge_config_dump_as_json() -> None:
-    """Test the default hinge configuration dump as JSON."""
-    default_hinge_config_dump_as_json()
+def test_default_hinge_config_dumping_and_loading() -> None:
+    """Test the default hinge configuration dumping and loading."""
+    hinge = Hinge()
+    hinge.config_generate()
+    hinge.config_dump_as_json()
+    hinge.config_load_from_json()
 
 
-def test_default_hinge_config_load_from_json() -> None:
-    """Test the default hinge configuration load from JSON."""
-    default_hinge_config_dump_as_json()
-    default_hinge_config_load_from_json()
+def test_hinge_model_xml_dumping_and_loading() -> None:
+    """Test the XML dumping and loading of hinge model."""
+    hinge = Hinge()
+    hinge.config_generate()
+    hinge.create_mjspec()
+    hinge.dump_mjspec_as_xml()
+    hinge.load_mjspec_from_xml()
 
 
-def test_generate_hinge_model_xml() -> None:
-    """Test the generation of hinge model XML."""
-    hinge_config = default_hinge_config_load_from_json()
-    body = Hinge(hinge_config)
-    world = World()
-    spawn_site = world.spec.worldbody.add_site()
-    spawn_site.attach_body(body=body.spec.worldbody, prefix="child-", suffix="")
-    world.spec.to_xml()
+def test_custom_hinge_config_dumping_and_loading() -> None:
+    """Test the custom hinge configuration dumping and loading."""
+    # Hinge configuration
+    units = Units(length="cm", mass="g")
+    s_dims = Dimensions(width=5, depth=5, height=5)
+    stator = BaseConfiguration(
+        mass=1,
+        color=(0, 0.55, 0.88, 1),
+        dimensions=s_dims,
+        units=units,
+    )
+    r_dims = Dimensions(width=5, depth=5, height=5)
+    rotor = BaseConfiguration(
+        mass=0.5,
+        color=(0, 0.25, 1, 1),
+        dimensions=r_dims,
+        units=units,
+    )
+    hinge_config = HingeConfiguration(stator=stator, rotor=rotor)
+
+    # Hinge
+    hinge = Hinge()
+    hinge.config = hinge_config
+    hinge.create_mjspec()
+    hinge.spec.compile()
 
 
 def test_generate_hinge_model_compile() -> None:
     """Test the compilation of hinge model."""
-    hinge_config = default_hinge_config_load_from_json()
-    body = Hinge(hinge_config)
+    # Hinge
+    hinge = Hinge()
+    hinge.config_generate()
+    hinge.create_mjspec()
+
+    # World
     world = World()
     spawn_site = world.spec.worldbody.add_site()
-    spawn_site.attach_body(body=body.spec.worldbody, prefix="child-", suffix="")
+    spawn_site.attach_body(
+        body=hinge.spec.worldbody,
+        prefix="child-",
+        suffix="",
+    )
     world.spec.compile()
