@@ -202,6 +202,14 @@ wheels = [
 ]
 
 [[package]]
+name = "docconvert"
+version = "2.2.0"
+source = { git = "https://github.com/cbillingham/docconvert#9a7a145fc8d599668ab75e3954b8b136c7827a06" }
+dependencies = [
+    { name = "six" },
+]
+
+[[package]]
 name = "embreex"
 version = "2.17.7.post6"
 source = { registry = "https://pypi.org/simple" }
@@ -939,6 +947,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "astropy" },
+    { name = "docconvert" },
     { name = "matplotlib" },
     { name = "mujoco" },
     { name = "mypy" },
@@ -955,6 +964,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "astropy", specifier = ">=7.0.1" },
+    { name = "docconvert", git = "https://github.com/cbillingham/docconvert" },
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "mujoco", specifier = ">=3.3.2" },
     { name = "mypy", specifier = ">=1.15.0" },

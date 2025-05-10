@@ -7,6 +7,7 @@ authors = [{ name = "JMDM", email = "jmo.880@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
     "astropy>=7.0.1",
+    "docconvert",
     "matplotlib>=3.10.1",
     "mujoco>=3.3.2",
     "mypy>=1.15.0",
