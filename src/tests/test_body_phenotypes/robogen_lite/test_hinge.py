@@ -1,5 +1,4 @@
-"""
-Test: src/revolve/body_phenotypes/robogen_lite (hinge).
+"""Test: src/revolve/body_phenotypes/robogen_lite (hinge).
 
 Author:     jmdm
 Date:       2025-04-30

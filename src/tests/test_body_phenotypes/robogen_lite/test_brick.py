@@ -1,21 +1,11 @@
-"""
-Test: src/revolve/body_phenotypes/robogen_lite (brick).
+"""Test the Brick class of the Robogen Lite body phenotypes.
 
 Author:     jmdm
 Date:       2025-04-30
-
 Py Ver:     3.12
-
-OS:         macOS  Sequoia 15.3.1
-Hardware:   M4 Pro
-
-Todo:
-    [ ]
-
 """
 
 # Local libraries
-
 from revolve.body_phenotypes.base_configuration import Dimensions, Units
 from revolve.body_phenotypes.robogen_lite.brick.generator import (
     Brick,
@@ -74,7 +64,7 @@ def test_custom_brick_config_dumping_and_loading() -> None:
         units=units,
     )
 
-    # brick
+    # Brick
     body = Brick()
     body.config = config
     body.create_mjspec()
@@ -83,7 +73,7 @@ def test_custom_brick_config_dumping_and_loading() -> None:
 
 def test_generate_brick_model_compile() -> None:
     """Test the compilation of brick model."""
-    # brick
+    # Brick
     body = Brick()
     body.config_generate()
     body.create_mjspec()
