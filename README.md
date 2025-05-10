@@ -1,5 +1,7 @@
 # Ariel: Autonomous Robots through Integrated Evolution and Learning
 
+## TODO: Installation
+
 ## Notes
 
 ### Units
