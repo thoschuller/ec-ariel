@@ -61,6 +61,14 @@ respect-gitignore = false # Ignore files listed in .gitignore.
 line-length = 80
 indent-width = 4
 
+[lint.pycodestyle]
+ignore-overlong-task-comments = true
+max-doc-length = 80
+max-line-length = 80
+
+[lint.pydocstyle]
+convention = "numpy"
+
 [format]
 preview = true
 
@@ -89,14 +97,6 @@ docstring-code-format = true
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
-
-[lint.pycodestyle]
-ignore-overlong-task-comments = true
-max-doc-length = 80
-max-line-length = 80
-
-[lint.pydocstyle]
-convention = "numpy"
 
 [lint]
 select = ["ALL"]
