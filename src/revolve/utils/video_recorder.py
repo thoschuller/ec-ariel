@@ -1,26 +1,29 @@
-"""
-TODO(jmdm): description of script.
+"""TODO(jmdm): description of script.
 
 Author:     jmdm
 Date:       2025-05-02
-
 Py Ver:     3.12
-
 OS:         macOS  Sequoia 15.3.1
 Hardware:   M4 Pro
 
 Status:     In progress ⚙️
+Status:     Paused ⏸️
+Status:     Completed ✅
+Status:     Incomplete ❌
+Status:     Broken ⚠️
+Status:     To Improve ⬆️
 
-This code is provided "As Is"
-
-Sources:
+Sources
+-----
     1.
 
-Notes:
+Notes
+-----
     *
 
-Todo:
-    [ ]
+Todo
+-----
+    * [ ]
 
 """
 
@@ -38,7 +41,8 @@ class VideoRecorder:
     """Simple video recorder."""
 
     # Encoding: 'mp4v' or 'avc1' for H.264
-    video_encoding: str = "mp4v"
+    _video_encoding: str = "mp4v"
+    _add_timestamp_to_file_name: bool = True
 
     def __init__(
         self,
@@ -47,8 +51,6 @@ class VideoRecorder:
         width: int = 640,
         height: int = 480,
         fps: int = 30,
-        *,
-        add_timestamp_to_file_name: bool = True,
     ) -> None:
         """Create a video recording."""
         # Ensure output folder exists
@@ -56,7 +58,7 @@ class VideoRecorder:
 
         # Generate video name
         output_folder = output_folder.rstrip("/")
-        if add_timestamp_to_file_name:
+        if self._add_timestamp_to_file_name:
             timestamp = datetime.datetime.now(tz=datetime.UTC).strftime(
                 "%Y%m%d%H%M%S",
             )
@@ -64,7 +66,7 @@ class VideoRecorder:
         output_file = f"{output_folder}/{video_name}.mp4"
 
         # Create recorder object
-        fourcc = cv2.VideoWriter_fourcc(*self.video_encoding)
+        fourcc = cv2.VideoWriter_fourcc(*self._video_encoding)
         video_writer = cv2.VideoWriter(
             output_file,
             fourcc,

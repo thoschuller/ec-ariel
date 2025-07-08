@@ -1,5 +1,4 @@
-"""
-TODO(jmdm): description of script.
+"""TODO(jmdm): description of script.
 
 Author:     jmdm
 Date:       2025-05-02
