@@ -43,35 +43,47 @@ class VideoRecorder:
     # Encoding: 'mp4v' or 'avc1' for H.264
     _video_encoding: str = "mp4v"
     _add_timestamp_to_file_name: bool = True
+    _file_extension: str = ".mp4"
 
     def __init__(
         self,
-        video_name: str = "video",
-        output_folder: str = "./",
+        file_name: str = "video",
+        output_folder: str | Path | None = None,
         width: int = 640,
         height: int = 480,
         fps: int = 30,
     ) -> None:
         """Create a video recording."""
+        # Save local variables
+        self.width = width
+        self.height = height
+        self.fps = fps
+
+        # Set output folder
+        if output_folder is None:
+            output_folder = Path.cwd()
+        elif isinstance(output_folder, str):
+            # Convert string to Path
+            output_folder = Path(output_folder)
+
         # Ensure output folder exists
         Path(output_folder).mkdir(exist_ok=True, parents=True)
 
         # Generate video name
-        output_folder = output_folder.rstrip("/")
         if self._add_timestamp_to_file_name:
             timestamp = datetime.datetime.now(tz=datetime.UTC).strftime(
-                "%Y%m%d%H%M%S",
+                "%Y%m%d_%H%M%S",
             )
-            video_name += f"_{timestamp}"
-        output_file = f"{output_folder}/{video_name}.mp4"
+            file_name += f"_{timestamp}"
+        output_file = output_folder / f"{file_name}{self._file_extension}"
 
         # Create recorder object
         fourcc = cv2.VideoWriter_fourcc(*self._video_encoding)
         video_writer = cv2.VideoWriter(
             output_file,
             fourcc,
-            fps,
-            (width, height),
+            self.fps,
+            (self.width, self.height),
         )
 
         # Class attributes
