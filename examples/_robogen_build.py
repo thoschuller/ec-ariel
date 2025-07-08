@@ -31,7 +31,7 @@ from revolve.body_phenotypes.robogen_lite.config import (
 from revolve.body_phenotypes.robogen_lite.modules.brick import BrickModule
 from revolve.body_phenotypes.robogen_lite.modules.core import CoreModule
 from revolve.body_phenotypes.robogen_lite.modules.hinge import HingeModule
-from revolve.environments.simple_world import SimpleWorld
+from revolve.environments.simple_flat_world import SimpleFlatWorld
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -161,7 +161,7 @@ def main() -> None:
     viz_options.flags[mujoco.mjtVisFlag.mjVIS_BODYBVH] = True
 
     # MuJoCo basics
-    world = SimpleWorld()
+    world = SimpleFlatWorld()
     # robot = DummyRobotTestCtrl()
     # robot = DummyRobotTestRotate()
     robot = DummyRobotTestAttach()
