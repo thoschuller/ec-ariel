@@ -1,1 +1,1 @@
-"""Hinge."""
+"""Robogen Lite."""
