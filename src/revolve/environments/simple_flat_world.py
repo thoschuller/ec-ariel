@@ -11,7 +11,7 @@ import mujoco
 USE_DEGREES = False
 
 
-class SimpleWorld:
+class SimpleFlatWorld:
     """Specification for a basic MuJoCo world."""
 
     def __init__(
