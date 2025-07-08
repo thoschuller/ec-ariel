@@ -48,24 +48,24 @@ class DummyRobotTestAttach:
 
     def __init__(self) -> None:
         """Initialize the robot model."""
-        core = CoreModule()
+        core = CoreModule(index := 0)
 
         for side_i in ModuleFaces:
             if side_i in core.sites:
-                module_1 = HingeModule()
+                module_1 = HingeModule(index := index + 1)
                 core.sites[side_i].attach_body(
                     body=module_1.body,
                     prefix=f"{module_1.index}-{side_i.value}-",
                 )
 
-                module_2 = BrickModule()
+                module_2 = BrickModule(index := index + 1)
                 module_1.sites[ModuleFaces.FRONT].attach_body(
                     body=module_2.body,
                     prefix=f"{module_2.index}-{side_i.value}-",
                 )
                 for side_j in ModuleFaces:
                     if side_j in module_2.sites:
-                        module_3 = HingeModule()
+                        module_3 = HingeModule(index := index + 1)
                         module_2.sites[side_j].attach_body(
                             body=module_3.body,
                             prefix=f"{module_3.index}-{side_j.value}-",
@@ -80,29 +80,29 @@ class DummyRobotTestRotate:
 
     def __init__(self) -> None:
         """Initialize the robot model."""
-        core = CoreModule()
+        core = CoreModule(index := 0)
 
         core.sites[ModuleFaces.BOTTOM].attach_body(
-            body=BrickModule().body,
+            body=BrickModule(index := index + 1).body,
             prefix="brick-bottom-",
         )
 
         for idx, rot_i in enumerate(ModuleRotationsTheta):
-            module_1 = HingeModule()
+            module_1 = HingeModule(index := index + 1)
             module_1.rotate(angle=rot_i.value)
             list(core.sites.values())[idx].attach_body(
                 body=module_1.body,
                 prefix=f"{rot_i.name}={module_1.index}-{ModuleFaces.FRONT.name}-",
             )
 
-            module_2 = BrickModule()
+            module_2 = BrickModule(index := index + 1)
             module_2.rotate(angle=90)
             module_1.sites[ModuleFaces.FRONT].attach_body(
                 body=module_2.body,
                 prefix=f"{module_2.index}-{ModuleFaces.FRONT.name}-",
             )
 
-            module_3 = HingeModule()
+            module_3 = HingeModule(index := index + 1)
             module_2.sites[ModuleFaces.RIGHT].attach_body(
                 body=module_3.body,
                 prefix=f"{module_3.index}-{ModuleFaces.FRONT.name}-",
@@ -117,29 +117,29 @@ class DummyRobotTestCtrl:
 
     def __init__(self) -> None:
         """Initialize the robot model."""
-        core = CoreModule()
+        core = CoreModule(index := 0)
 
         core.sites[ModuleFaces.BOTTOM].attach_body(
-            body=BrickModule().body,
+            body=BrickModule(index := index + 1).body,
             prefix="brick-bottom-",
         )
 
         for side_i in (ModuleFaces.FRONT, ModuleFaces.BACK):
             if side_i in core.sites:
-                module_1 = HingeModule()
+                module_1 = HingeModule(index := index + 1)
                 core.sites[side_i].attach_body(
                     body=module_1.body,
                     prefix=f"{module_1.index}-{side_i.value}-",
                 )
 
-                module_2 = BrickModule()
+                module_2 = BrickModule(index := index + 1)
                 module_1.sites[ModuleFaces.FRONT].attach_body(
                     body=module_2.body,
                     prefix=f"{module_2.index}-{side_i.value}-",
                 )
                 for side_j in ModuleFaces:
                     if side_j in module_2.sites:
-                        module_3 = HingeModule()
+                        module_3 = HingeModule(index := index + 1)
                         module_2.sites[side_j].attach_body(
                             body=module_3.body,
                             prefix=f"{module_3.index}-{side_j.value}-",
