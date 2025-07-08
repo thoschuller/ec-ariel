@@ -1,28 +1,23 @@
 """Hopf-based Central Pattern Generator (CPG).
 
-Author:     jmdm
 Date:       2025-05-03
+Status:     In progress ⚙️
 
-Py Ver:     3.12
+Sources
+-------
+    [1] https://www.sciencedirect.com/science/article/pii/S2667379722000353#sec4
 
-OS:         macOS  Sequoia 15.3.1
-Hardware:   M4 Pro
-
-Status:     Complete ✅
-
-This code is provided "As Is"
-
-Sources:
-    1. https://www.sciencedirect.com/science/article/pii/S2667379722000353#sec4
-
-Notes:
+Notes
+-----
     *
 
-Todo:
+Todo
+----
     [ ]
 
 """
 
+# Stand
 from typing import Any
 
 import numpy as np
@@ -33,18 +28,7 @@ RNG = np.random.default_rng(seed=SEED)
 
 
 class HopfCPG:
-    """TODO."""
-
     def __init__(self, num_neurons: int, dt: float = 0.02) -> None:
-        """_summary_.
-
-        Parameters
-        ----------
-        num_neurons : int
-            _description_
-        dt : float
-            _description_, defaults to 0.01
-        """
         self.num_neurons = num_neurons
         self.dt = dt
 
@@ -85,7 +69,6 @@ class HopfCPG:
         np.ndarray[tuple[int, ...], np.dtype[Any]],
         np.ndarray[tuple[int, ...], np.dtype[Any]],
     ]:
-        """Perform one integration step of the CPG network."""
         new_x = np.zeros_like(self.x)
         new_y = np.zeros_like(self.y)
 
@@ -143,13 +126,6 @@ class HopfCPG:
         np.ndarray[tuple[int, ...], np.dtype[Any]],
         np.ndarray[tuple[int, ...], np.dtype[Any]],
     ]:
-        """Simulate the CPG network for a given number of steps.
-
-        Returns:
-        - x_history: Array of x states over time
-        - y_history: Array of y states over time
-
-        """
         # Main simulation
         x_history = np.zeros((steps, self.num_neurons))
         y_history = np.zeros((steps, self.num_neurons))
