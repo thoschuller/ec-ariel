@@ -16,6 +16,7 @@ import quaternion as qnp
 # Local libraries
 from revolve.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
+    ModuleType,
 )
 from revolve.body_phenotypes.robogen_lite.modules.module import Module
 
@@ -40,12 +41,12 @@ ROTOR_DIMENSIONS: DimensionType = (0.025, 0.02, 0.025)
 class HingeModule(Module):
     """Hinge module specifications."""
 
-    module_type: str = "hinge"  # Hinge is a type of module
+    module_type: str = ModuleType.HINGE
 
-    def __init__(self) -> None:
-        """Initialize the hinge module."""
-        # Initialize the parent class
-        super().__init__()
+    def __init__(self, index: int) -> None:
+        """Initialize the brick module."""
+        # Call the parent constructor
+        super().__init__(index=index)
 
         # Create the parent spec.
         spec = mujoco.MjSpec()

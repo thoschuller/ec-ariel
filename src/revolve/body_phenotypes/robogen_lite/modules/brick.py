@@ -16,6 +16,7 @@ import quaternion as qnp
 # Local libraries
 from revolve.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
+    ModuleType,
 )
 from revolve.body_phenotypes.robogen_lite.modules.module import Module
 
@@ -35,12 +36,12 @@ BRICK_DIMENSIONS: DimensionType = (0.05, 0.05, 0.05)
 class BrickModule(Module):
     """Brick module specifications."""
 
-    module_type: str = "brick"  # Brick is a type of module
+    module_type: str = ModuleType.BRICK
 
-    def __init__(self) -> None:
+    def __init__(self, index: int) -> None:
         """Initialize the brick module."""
-        # Initialize the parent class
-        super().__init__()
+        # Call the parent constructor
+        super().__init__(index=index)
 
         # Create the parent spec.
         spec = mujoco.MjSpec()

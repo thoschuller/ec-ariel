@@ -11,7 +11,9 @@ import quaternion as qnp
 
 # Local libraries
 from revolve.body_phenotypes.robogen_lite.config import (
+    IDX_OF_CORE,
     ModuleFaces,
+    ModuleType,
 )
 from revolve.body_phenotypes.robogen_lite.modules.module import Module
 
@@ -31,13 +33,15 @@ CORE_DIMENSIONS: DimensionType = (0.10, 0.10, 0.10)
 class CoreModule(Module):
     """Core module specifications."""
 
-    module_type: str = "core"  # Core is a unique module type
-    index: int = 0  # Core is unique module, so index is always 0
+    module_type: str = ModuleType.CORE
 
-    def __init__(self) -> None:
-        """Initialize the core module."""
-        # Initialize the parent class
-        super().__init__()
+    def __init__(self, index: int) -> None:
+        """Initialize the brick module."""
+        # Overwrite the index for the core module
+        index = IDX_OF_CORE
+
+        # Call the parent constructor
+        super().__init__(index=index)
 
         # Create the parent spec.
         spec = mujoco.MjSpec()
@@ -179,6 +183,7 @@ class CoreModule(Module):
         AttributeError
             Core module does not support rotation.
         """
-        msg = f"Attempted to rotate the core module by: {angle}."
-        msg += f"Core ({self.index}) module does not support rotation."
-        raise AttributeError(msg)
+        if angle != 0:
+            msg = f"Attempted to rotate the core module by: {angle}."
+            msg += f"Core ({self.index}) module does not support rotation."
+            raise AttributeError(msg)
