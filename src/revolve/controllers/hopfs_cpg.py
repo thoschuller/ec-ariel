@@ -85,7 +85,7 @@ class HopfCPG:
                 + self.alpha[i] * (self.A[i] ** 2 - r_squared) * self.y[i]
             )
 
-            # Coupling terms from neighboring oscillators
+            # Coupling terms from neighbouring oscillators
             for j in [i - 1, i + 1]:
                 if 0 <= j < self.num_neurons:
                     # Rotation matrix for phase difference
