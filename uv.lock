@@ -687,6 +687,30 @@ wheels = [
 ]
 
 [[package]]
+name = "numpy-quaternion"
+version = "2024.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/78/1e99d71c017eb7e1df2eb045caa42eb58443060c053b21449f6d3cc3029a/numpy_quaternion-2024.0.9.tar.gz", hash = "sha256:de0125055bb2fed019c1afe8fe5a9844739a46196a1ee8838fa6b6b2a149aaad", size = 67048, upload-time = "2025-06-18T19:13:18.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/d2/38d6d37d19e6a374510031aff609f24e5885667ef004601a76dbcf6b083d/numpy_quaternion-2024.0.9-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:c75588ce5b9d0849951e3973a16f8b376cd9e3c6a879b0dcaeb4e2e6541c589b", size = 86620, upload-time = "2025-06-18T19:13:21.526Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/99/8c1305b5e2fbf82a3819abb0b25ca5322ca0a77481cf45e34421ac25dd4e/numpy_quaternion-2024.0.9-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:b8b917f4d815b099aee978a4794ceaddea18d0604a3e405cc7e5351106abd726", size = 61446, upload-time = "2025-06-18T19:13:12.257Z" },
+    { url = "https://files.pythonhosted.org/packages/91/96/984700059e3b49c152b08525783c596e19aaa2d0ea5308479a1d4e7c43b7/numpy_quaternion-2024.0.9-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:9e1470b0a04e068a1bee285d3fc5a60670992a6697c60036517baa7cae4ad14d", size = 55427, upload-time = "2025-06-18T19:13:09.872Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/4b/0ffc89ccc964436117695da42966ac52cea66326da005268f2efa27ed187/numpy_quaternion-2024.0.9-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:5045fbe067bd14d50df0f9595dd85b248f4aa312f8c93a5c0ea83cf359cb63c7", size = 190333, upload-time = "2025-06-18T19:13:03.324Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/79/f32684cf06eaf2cbc78076e6fcc03ef5530a3aae96d8cf418f3294991e6c/numpy_quaternion-2024.0.9-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:112fda689b5e66fd7079a5bfbfaf95ba51e78167afb56484657788491854499a", size = 184808, upload-time = "2025-06-18T19:13:13.043Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/88/303bc8c5fd49b0dcef99b0dcd7d2d8709b54ba73bcfa15cc608525955189/numpy_quaternion-2024.0.9-cp312-cp312-win_amd64.whl", hash = "sha256:298090f4eb512b07f0e2e6b0bb3daa3ddb0a8d5eb43c582accd7515d0e8b1025", size = 70775, upload-time = "2025-06-18T19:13:11.464Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/e5/e079bb99ab3f76f8f073b3c7e8f39b96b74f12dda270ef78f5925023efc2/numpy_quaternion-2024.0.9-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:21227bea08be9a8e10a87c2bab8e58ec00f218ab925c6e53418905f3540bd42d", size = 86622, upload-time = "2025-06-18T19:13:02.587Z" },
+    { url = "https://files.pythonhosted.org/packages/25/0d/1a10f78e74fc149d486fd481878c5175118a1c3507ee4661fe13f0511ce9/numpy_quaternion-2024.0.9-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:bef717eecbd073a4f4c9aab72b96c0429888a458fd38586d6f3281564df47ed9", size = 61447, upload-time = "2025-06-18T19:13:17.057Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/f0/b23540eb803cec6c63cf4d004cc51e40a75086250a12cdd6e88ace852239/numpy_quaternion-2024.0.9-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6d716d17dbe8db4d71cf49592cb81b5c6125323bae7d36bccb8c4e8175cb3e48", size = 55422, upload-time = "2025-06-18T19:13:14.729Z" },
+    { url = "https://files.pythonhosted.org/packages/68/2d/22bfca64c229d74a38294e2e3021ecf6021938fa6f37cbf3d962ce04b986/numpy_quaternion-2024.0.9-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:025e7403485dbcfe392812356bd0a5581fdd8b0150f5b304e4fed967e544cf89", size = 190436, upload-time = "2025-06-18T19:13:06.309Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/7f/56bee75d88bd0466ef704f859464f071c9da48e0b03f2af482485b813fe8/numpy_quaternion-2024.0.9-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f3afc7526aed0ac80c12d64b04209f505b2611ad5964f117432a80628dd94272", size = 184841, upload-time = "2025-06-18T19:13:01.36Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/1a/36c55b38f3db3fd636f7a1be23dbc17e6528d55bf13e629850b9d8048cc2/numpy_quaternion-2024.0.9-cp313-cp313-win_amd64.whl", hash = "sha256:3e73de609c0b7dd70fef279db0512e907edcaa969da5d432f0db79926be1e7e6", size = 70774, upload-time = "2025-06-18T19:13:13.91Z" },
+]
+
+[[package]]
 name = "opencv-python"
 version = "4.11.0.86"
 source = { registry = "https://pypi.org/simple" }
@@ -951,7 +975,9 @@ dependencies = [
     { name = "matplotlib" },
     { name = "mujoco" },
     { name = "mypy" },
+    { name = "networkx" },
     { name = "numpy" },
+    { name = "numpy-quaternion" },
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -959,6 +985,7 @@ dependencies = [
     { name = "rich" },
     { name = "ruff" },
     { name = "trimesh", extra = ["easy"] },
+    { name = "types-networkx" },
 ]
 
 [package.metadata]
@@ -968,7 +995,9 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "mujoco", specifier = ">=3.3.2" },
     { name = "mypy", specifier = ">=1.15.0" },
+    { name = "networkx", specifier = ">=3.4.2" },
     { name = "numpy", specifier = ">=2.2.5" },
+    { name = "numpy-quaternion", specifier = ">=2024.0.9" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "pydantic", specifier = ">=2.11.3" },
@@ -976,6 +1005,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.0.0" },
     { name = "ruff", specifier = ">=0.11.7" },
     { name = "trimesh", extras = ["easy"], specifier = ">=4.6.8" },
+    { name = "types-networkx", specifier = ">=3.5.0.20250610" },
 ]
 
 [[package]]
@@ -1211,6 +1241,18 @@ easy = [
     { name = "svg-path" },
     { name = "vhacdx" },
     { name = "xxhash" },
+]
+
+[[package]]
+name = "types-networkx"
+version = "3.5.0.20250610"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/67/25/2c101319d0e7e715a31f0fcaf1080b70c113166edf76c6a88010f2959968/types_networkx-3.5.0.20250610.tar.gz", hash = "sha256:874196bef3f116f57ca86818a576274def24c5a66cb00ff77d3e1f376ab57157", size = 64416, upload-time = "2025-06-10T03:12:45.3Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/7a/3658f84cfc20500a231d2aae1c98c284f61e5e366aabccda38c9ab6095dc/types_networkx-3.5.0.20250610-py3-none-any.whl", hash = "sha256:c428b96c544f28fe955bfc2253581ed5d3389a59c03997b79da5188be0191c56", size = 150419, upload-time = "2025-06-10T03:12:43.799Z" },
 ]
 
 [[package]]

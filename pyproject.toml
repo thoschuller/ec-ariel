@@ -11,7 +11,9 @@ dependencies = [
     "matplotlib>=3.10.1",
     "mujoco>=3.3.2",
     "mypy>=1.15.0",
+    "networkx>=3.4.2",
     "numpy>=2.2.5",
+    "numpy-quaternion>=2024.0.9",
     "opencv-python>=4.11.0.86",
     "pillow>=11.2.1",
     "pydantic>=2.11.3",
@@ -19,6 +21,7 @@ dependencies = [
     "rich>=14.0.0",
     "ruff>=0.11.7",
     "trimesh[easy]>=4.6.8",
+    "types-networkx>=3.5.0.20250610",
 ]
 
 [build-system]
