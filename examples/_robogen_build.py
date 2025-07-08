@@ -22,7 +22,6 @@ from pathlib import Path
 import mujoco
 from mujoco import viewer
 from rich.console import Console
-from rich.traceback import install
 
 from revolve.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
@@ -32,6 +31,7 @@ from revolve.body_phenotypes.robogen_lite.modules.brick import BrickModule
 from revolve.body_phenotypes.robogen_lite.modules.core import CoreModule
 from revolve.body_phenotypes.robogen_lite.modules.hinge import HingeModule
 from revolve.environments.simple_flat_world import SimpleFlatWorld
+from revolve.utils.renderers import single_frame_renderer
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -40,7 +40,6 @@ DATA = Path(CWD / "__data__" / SCRIPT_NAME)
 DATA.mkdir(exist_ok=True)
 
 # Global functions
-install(show_locals=True)
 console = Console(width=180)
 
 
@@ -91,7 +90,6 @@ class DummyRobotTestRotate:
         for idx, rot_i in enumerate(ModuleRotationsTheta):
             module_1 = HingeModule()
             module_1.rotate(angle=rot_i.value)
-            console.log(rot_i)
             list(core.sites.values())[idx].attach_body(
                 body=module_1.body,
                 prefix=f"{rot_i.name}={module_1.index}-{ModuleFaces.FRONT.name}-",
@@ -150,7 +148,11 @@ class DummyRobotTestCtrl:
         self.spec: mujoco.MjSpec = core.spec
 
 
-def main() -> None:
+def run(
+    robot: DummyRobotTestAttach | DummyRobotTestCtrl | DummyRobotTestRotate,
+    *,
+    with_viewer: bool = False,
+) -> None:
     """Entry point."""
     # MuJoCo configuration
     viz_options = mujoco.MjvOption()  # visualization of various elements
@@ -162,9 +164,6 @@ def main() -> None:
 
     # MuJoCo basics
     world = SimpleFlatWorld()
-    # robot = DummyRobotTestCtrl()
-    # robot = DummyRobotTestRotate()
-    robot = DummyRobotTestAttach()
 
     # Set random colors for geoms
     for i in range(len(robot.spec.geoms)):
@@ -183,13 +182,29 @@ def main() -> None:
         f.write(xml)
 
     # Number of actuators and DoFs
-    console.log(f"{model.nq=}, {model.nu=}")
+    console.log(f"DoF (model.nv): {model.nv}, Actuators (model.nu): {model.nu}")
 
     # Reset state and time of simulation
     mujoco.mj_resetData(model, data)
 
-    # Launch viewer
-    viewer.launch(model=model, data=data)
+    # Render
+    single_frame_renderer(model, data, steps=10)
+
+    # View
+    if with_viewer:
+        viewer.launch(model=model, data=data)
+
+
+def main() -> None:
+    """Entry point."""
+    robot = DummyRobotTestCtrl()
+    run(robot)
+
+    robot = DummyRobotTestRotate()
+    run(robot)
+
+    robot = DummyRobotTestAttach()
+    run(robot, with_viewer=True)
 
 
 if __name__ == "__main__":

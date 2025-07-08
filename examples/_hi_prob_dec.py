@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 # Third-party libraries
 import numpy as np
 from rich.console import Console
-from rich.traceback import install
 
 # Local libraries
 from revolve.body_phenotypes.robogen_lite.config import (
@@ -41,7 +40,6 @@ DATA.mkdir(exist_ok=True)
 SEED = 42
 
 # Global functions
-install(show_locals=True)
 console = Console()
 RNG = np.random.default_rng(SEED)
 
