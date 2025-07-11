@@ -15,9 +15,9 @@ from pathlib import Path
 import mujoco
 
 # Local libraries
-from revolve.environments.simple_flat_world import SimpleFlatWorld
-from revolve.utils.renderers import video_renderer
-from revolve.utils.video_recorder import VideoRecorder
+from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.utils.renderers import video_renderer
+from ariel.utils.video_recorder import VideoRecorder
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -41,7 +41,7 @@ def main() -> None:
     )
 
     # Add object to world
-    world.spawn(body, spawn_position=(0, 0, 0.2))
+    world.spawn(body)
 
     # Generate the model and data
     model = world.spec.compile()

@@ -12,8 +12,8 @@ Status:     Completed ✅
 import mujoco
 
 # Local libraries
-from revolve.environments.simple_flat_world import SimpleFlatWorld
-from revolve.utils.renderers import single_frame_renderer
+from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.utils.renderers import single_frame_renderer
 
 
 def main() -> None:
@@ -31,7 +31,7 @@ def main() -> None:
     )
 
     # Add object to world
-    world.spawn(body, spawn_position=(0, 0, 0.2))
+    world.spawn(body)
 
     # Generate the model and data
     model = world.spec.compile()

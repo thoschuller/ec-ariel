@@ -1,11 +1,24 @@
 """TODO(jmdm): description of script.
 
 Author:     jmdm
-Date:       2025-06-25
+Date:       2025-07-08
 Py Ver:     3.12
 OS:         macOS  Sequoia 15.3.1
 Hardware:   M4 Pro
-Status:     Completed ✅
+Status:     In progress ⚙️
+
+Notes
+-----
+    *
+
+References
+----------
+    [1]
+
+Todo
+----
+    [ ] documentation
+
 """
 
 # Standard library
@@ -15,7 +28,6 @@ from typing import TYPE_CHECKING, Any
 # Third-party libraries
 import mujoco
 import numpy as np
-from mujoco import viewer
 from rich.console import Console
 
 # Local libraries
@@ -32,8 +44,10 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     save_graph_as_json,
 )
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
 from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.utils.renderers import single_frame_renderer
+from ariel.utils.renderers import video_renderer
+from ariel.utils.video_recorder import VideoRecorder
 
 if TYPE_CHECKING:
     from networkx import Graph
@@ -91,15 +105,16 @@ def main() -> None:
     core = construct_mjspec_from_graph(graph)
 
     # Simulate the robot
-    run(core, with_viewer=True)
+    run(core)
 
 
 def run(
     robot: CoreModule,
-    *,
-    with_viewer: bool = False,
 ) -> None:
     """Entry point."""
+    # BugFix -> "Python exception raised"
+    mujoco.set_mjcb_control(None)
+
     # MuJoCo configuration
     viz_options = mujoco.MjvOption()  # visualization of various elements
 
@@ -122,6 +137,9 @@ def run(
     model = world.spec.compile()
     data = mujoco.MjData(model)
 
+    # Reset state and time of simulation
+    mujoco.mj_resetData(model, data)
+
     # Save the model to XML
     xml = world.spec.to_xml()
     with (DATA / f"{SCRIPT_NAME}.xml").open("w", encoding="utf-8") as f:
@@ -130,16 +148,44 @@ def run(
     # Number of actuators and DoFs
     console.log(f"DoF (model.nv): {model.nv}, Actuators (model.nu): {model.nu}")
 
-    # Reset state and time of simulation
-    mujoco.mj_resetData(model, data)
+    # Define action specification and set policy
+    data.ctrl = RNG.normal(scale=0.1, size=model.nu)
 
-    # Render
-    single_frame_renderer(model, data, steps=10)
+    # Actuators and CPG
+    mujoco.set_mjcb_control(None)
+    weight_matrix = RNG.uniform(-0.1, 0.1, size=(model.nu, model.nu))
+    cpg = CPGSensoryFeedback(
+        num_neurons=int(model.nu),
+        sensory_term=-0.0,
+        _lambda=0.01,
+        coupling_weights=weight_matrix,
+    )
+    cpg.reset()
+    mujoco.set_mjcb_control(lambda m, d: policy(m, d, cpg=cpg))
 
-    # View
-    if with_viewer:
-        viewer.launch(model=model, data=data)
+    # Non-default VideoRecorder options
+    video_recorder = VideoRecorder(output_folder=DATA)
+
+    # Render with video recorder
+    video_renderer(
+        model,
+        data,
+        duration=30,
+        video_recorder=video_recorder,
+    )
+
+
+def policy(
+    model: mujoco.MjModel,  # noqa: ARG001
+    data: mujoco.MjData,
+    cpg: CPGSensoryFeedback,
+) -> None:
+    """Use feedback term to shift the output of the CPGs."""
+    x, _ = cpg.step()
+    data.ctrl = x * np.pi / 2
 
 
 if __name__ == "__main__":
-    main()
+    # Test several times
+    for _ in range(5):
+        main()
