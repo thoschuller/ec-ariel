@@ -6,22 +6,19 @@ readme = "README.md"
 authors = [{ name = "JMDM", email = "jmo.880@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "astropy>=7.0.1",
-    "docconvert",
-    "matplotlib>=3.10.1",
-    "mujoco>=3.3.2",
-    "mypy>=1.15.0",
-    "networkx>=3.4.2",
-    "numpy>=2.2.5",
-    "numpy-quaternion>=2024.0.9",
+    "matplotlib>=3.10.3",
+    "mujoco>=3.3.4",
+    "mypy>=1.16.1",
+    "networkx>=3.5",
+    "numpy>=2.3.1",
+    "numpy-quaternion>=2024.0.10",
     "opencv-python>=4.11.0.86",
-    "pillow>=11.2.1",
-    "pydantic>=2.11.3",
-    "pytest>=8.3.5",
+    "pillow>=11.3.0",
+    "pydantic>=2.11.7",
+    "pytest>=8.4.1",
     "rich>=14.0.0",
-    "ruff>=0.11.7",
-    "trimesh[easy]>=4.6.8",
-    "types-networkx>=3.5.0.20250610",
+    "ruff>=0.12.2",
+    "trimesh[easy]>=4.7.0",
 ]
 
 [build-system]
