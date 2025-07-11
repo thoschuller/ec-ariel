@@ -1,13 +1,10 @@
 # Ariel: Autonomous Robots through Integrated Evolution and Learning
 
-<!--
-[ ] Friction increase (rev2)
-[ ] CMA only
-[ ] full rotation of hinges (45 increments)
-[ ] add top/bot
-[ ] Trimesh collision detect
-[ ] Spawn point + bounding box
- -->
+## Todo's
+
+- [ ] CMA only
+- [ ] Friction increase (what does rev2 do?)
+- [ ] Trimesh collision detect
 
 ## TODO: Installation
 
