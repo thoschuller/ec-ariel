@@ -26,7 +26,7 @@ class ModuleType(Enum):
     CORE = 0
     BRICK = 1
     HINGE = 2
-    DEAD = 3
+    NONE = 3
 
 
 class ModuleFaces(Enum):
@@ -44,18 +44,26 @@ class ModuleRotationsIdx(Enum):
     """Enum for module rotations as indices."""
 
     DEG_0 = 0
-    DEG_90 = 1
-    DEG_180 = 2
-    DEG_270 = 3
+    DEG_45 = 1
+    DEG_90 = 2
+    DEG_135 = 3
+    DEG_180 = 4
+    DEG_225 = 5
+    DEG_270 = 6
+    DEG_315 = 7
 
 
 class ModuleRotationsTheta(Enum):
     """Enum for module rotations in degrees."""
 
     DEG_0 = 0
+    DEG_45 = 45
     DEG_90 = 90
+    DEG_135 = 135
     DEG_180 = 180
+    DEG_225 = 225
     DEG_270 = 270
+    DEG_315 = 315
 
 
 class ModuleInstance(BaseModel):
@@ -80,10 +88,18 @@ ALLOWED_FACES: dict[ModuleType, list[ModuleFaces]] = {
         ModuleFaces.BACK,
         ModuleFaces.RIGHT,
         ModuleFaces.LEFT,
+        ModuleFaces.TOP,
+        ModuleFaces.BOTTOM,
     ],
-    ModuleType.BRICK: [ModuleFaces.FRONT, ModuleFaces.RIGHT, ModuleFaces.LEFT],
+    ModuleType.BRICK: [
+        ModuleFaces.FRONT,
+        ModuleFaces.RIGHT,
+        ModuleFaces.LEFT,
+        ModuleFaces.TOP,
+        ModuleFaces.BOTTOM,
+    ],
     ModuleType.HINGE: [ModuleFaces.FRONT],
-    ModuleType.DEAD: [],
+    ModuleType.NONE: [],
 }
 
 # Define allowed rotations for each module type
@@ -91,17 +107,23 @@ ALLOWED_ROTATIONS: dict[ModuleType, list[ModuleRotationsIdx]] = {
     ModuleType.CORE: [ModuleRotationsIdx.DEG_0],
     ModuleType.BRICK: [
         ModuleRotationsIdx.DEG_0,
+        ModuleRotationsIdx.DEG_45,
         ModuleRotationsIdx.DEG_90,
+        ModuleRotationsIdx.DEG_135,
         ModuleRotationsIdx.DEG_180,
+        ModuleRotationsIdx.DEG_225,
         ModuleRotationsIdx.DEG_270,
     ],
     ModuleType.HINGE: [
         ModuleRotationsIdx.DEG_0,
+        ModuleRotationsIdx.DEG_45,
         ModuleRotationsIdx.DEG_90,
+        ModuleRotationsIdx.DEG_135,
         ModuleRotationsIdx.DEG_180,
+        ModuleRotationsIdx.DEG_225,
         ModuleRotationsIdx.DEG_270,
     ],
-    ModuleType.DEAD: [ModuleRotationsIdx.DEG_0],
+    ModuleType.NONE: [ModuleRotationsIdx.DEG_0],
 }
 
 # Global constants

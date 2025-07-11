@@ -37,7 +37,7 @@ from networkx import DiGraph, Graph
 from networkx.readwrite import json_graph
 
 # Local libraries
-from revolve.body_phenotypes.robogen_lite.config import (
+from ariel.body_phenotypes.robogen_lite.config import (
     ALLOWED_FACES,
     ALLOWED_ROTATIONS,
     IDX_OF_CORE,
@@ -217,7 +217,7 @@ class HighProbabilityDecoder:
 
             # Update the rotation probability space
             rotation_type = ModuleRotationsIdx(
-                int(np.argmax(self.rot_p_space[i]))
+                int(np.argmax(self.rot_p_space[i])),
             )
             self.rot_p_space[i, :] = 0.0
             self.rot_p_space[i, rotation_type.value] = 1.0
@@ -266,16 +266,6 @@ class HighProbabilityDecoder:
             self.rot_p_space,
             rot_p_space_mask,
         )
-
-        # print(rot_p_space_mask.shape)
-        # plt.imshow(rot_p_space_mask[:, :], cmap="gray")
-        # plt.show()
-
-        # plt.imshow(
-        #     self.rot_p_space[:, :],
-        #     cmap="gray",
-        # )
-        # plt.show()
 
 
 def save_graph_as_json(

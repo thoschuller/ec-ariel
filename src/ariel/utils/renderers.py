@@ -18,14 +18,15 @@ References
 
 """
 
-# Third-party libraries
+# Standard library
 import math
 
+# Third-party libraries
 import mujoco
 from PIL import Image
 from rich.console import Console
 
-from revolve.utils.video_recorder import VideoRecorder
+from ariel.utils.video_recorder import VideoRecorder
 
 # Global functions
 console = Console()

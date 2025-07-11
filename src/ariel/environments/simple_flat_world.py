@@ -6,6 +6,10 @@ Status:     Completed ✅
 
 # Third-party libraries
 import mujoco
+import numpy as np
+
+# Local libraries
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 # Global constants
 USE_DEGREES = False
@@ -16,7 +20,7 @@ class SimpleFlatWorld:
 
     def __init__(
         self,
-        floor_size: tuple[float, float, float] = (1, 1, 1),  # meters
+        floor_size: tuple[float, float, float] = (1, 1, 0.1),  # meters
     ) -> None:
         """
         Create a basic specification for MuJoCo.
@@ -24,7 +28,7 @@ class SimpleFlatWorld:
         Parameters
         ----------
         floor_size : tuple[float, float, float], optional
-            The size of the floor geom, by default (1, 1, 1)
+            The size of the floor geom, by default (1, 1, 0.1)
         """
         # Fixed parameters
         grid_name = "grid"
@@ -71,7 +75,6 @@ class SimpleFlatWorld:
             type=mujoco.mjtGeom.mjGEOM_PLANE,
             material=grid_name,
             size=self.floor_size,
-            pos=[0, 0, 0],  # z-offset
         )
 
         # Save specification
@@ -80,7 +83,10 @@ class SimpleFlatWorld:
     def spawn(
         self,
         mj_spec: mujoco.MjSpec,
-        spawn_position: tuple[float, float, float] = (0, 0, 0),
+        spawn_position: list[float, float, float] | None = None,
+        *,
+        small_gap: float = 0.0,
+        correct_for_bounding_box: bool = True,
     ) -> None:
         """
         Spawn a robot at a specific position in the world.
@@ -89,14 +95,36 @@ class SimpleFlatWorld:
         ----------
         mj_spec : mujoco.MjSpec
             The MuJoCo specification for the robot.
-        spawn_position : tuple[float, float, float], optional
+        spawn_position : list[float, float, float] | None, optional
             The position (x, y, z) to spawn the robot at, by default (0, 0, 0)
+        small_gap : float, optional
+            A small gap to add to the spawn position, by default 0.0
+        correct_for_bounding_box : bool, optional
+            If True, the spawn position will be adjusted to account for the robot's bounding box,
+            by default True
         """
+        # Default spawn position
+        if spawn_position is None:
+            spawn_position = [0, 0, 0]
+
+        # If correct_for_bounding_box is True, adjust the spawn position
+        if correct_for_bounding_box:
+            model = mj_spec.compile()
+            data = mujoco.MjData(model)
+            mujoco.mj_step(model, data, nstep=10)
+            min_corner, _ = compute_geom_bounding_box(model, data)
+            spawn_position[2] -= min_corner[2]
+
+        # If small_gap is True, add a small gap to the spawn position
+        spawn_position[2] += small_gap
+
         spawn_site = self.spec.worldbody.add_site(
-            pos=spawn_position,
+            pos=np.array(spawn_position),
         )
+
         spawn = spawn_site.attach_body(
             body=mj_spec.worldbody,
             prefix="robot-",
         )
+
         spawn.add_freejoint()

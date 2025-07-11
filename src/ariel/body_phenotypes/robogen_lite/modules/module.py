@@ -9,22 +9,29 @@ Todo:
 """
 
 # Standard library
+import typing
 from abc import ABC, abstractmethod
 
 
 class Module(ABC):
     """Base class for all modules."""
 
-    def __init__(self, index: int) -> None:
-        """
-        Initialize the module with an index.
+    required_attributes: typing.ClassVar[list[str]] = ["index", "module_type"]
 
-        Parameters
-        ----------
-        index : int
-            The index of the module.
+    def __init_subclass__(cls) -> None:
         """
-        self.index = index
+        Ensure that subclasses define required attributes.
+
+        Raises
+        ------
+        NotImplementedError
+            If a required attribute is not defined in the subclass.
+        """
+        super().__init_subclass__()
+        for attr in cls.required_attributes:
+            if not hasattr(cls, attr):
+                msg = f"Class '{cls.__name__}' must define attribute '{attr}'"
+                raise NotImplementedError(msg)
 
     @abstractmethod
     def rotate(self, angle: float) -> None:
