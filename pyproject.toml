@@ -3,22 +3,24 @@ name = "ariel"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [{ name = "JMDM", email = "jmo.880@gmail.com" }]
+authors = [
+    { name = "JMDM", email = "jmo.880@gmail.com" }
+]
 requires-python = ">=3.12"
 dependencies = [
+    "cmaes>=0.11.1",
     "matplotlib>=3.10.3",
     "mujoco>=3.3.4",
-    "mypy>=1.16.1",
+    "mypy>=1.17.0",
     "networkx>=3.5",
-    "numpy>=2.3.1",
     "numpy-quaternion>=2024.0.10",
-    "opencv-python>=4.11.0.86",
+    "opencv-python>=4.12.0.88",
     "pillow>=11.3.0",
     "pydantic>=2.11.7",
     "pytest>=8.4.1",
     "rich>=14.0.0",
-    "ruff>=0.12.2",
-    "trimesh[easy]>=4.7.0",
+    "ruff>=0.12.4",
+    "trimesh[easy]>=4.7.1",
 ]
 
 [build-system]

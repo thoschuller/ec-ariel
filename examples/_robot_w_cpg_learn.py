@@ -70,6 +70,40 @@ def main() -> None:
     # System parameters
     num_modules = 30
 
+    # Generate the probability space for the robot modules
+    type_p, conn_p, rot_p = generate_prob_space(num_modules)
+
+    # Decode the high-probability graph
+    hpd = HighProbabilityDecoder(num_modules)
+    graph: Graph[Any] = hpd.probability_matrices_to_graph(type_p, conn_p, rot_p)
+
+    # Save the graph to a file
+    save_graph_as_json(
+        graph,
+        DATA / "graph.json",
+    )
+
+    # Create the robot
+    robot = construct_mjspec_from_graph(graph)
+    run(robot)
+
+
+def generate_prob_space(
+    num_modules: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Generate the probability space for the robot modules.
+
+    Parameters
+    ----------
+    num_modules : int
+        The number of modules in the robot.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        The type, connection, and rotation probability spaces.
+    """
     # "Type" probability space
     type_probability_space = RNG.random(
         size=(num_modules, NUM_OF_TYPES_OF_MODULES),
@@ -88,23 +122,11 @@ def main() -> None:
         dtype=np.float32,
     )
 
-    # Decode the high-probability graph
-    hpd = HighProbabilityDecoder(num_modules)
-    graph: Graph[Any] = hpd.probability_matrices_to_graph(
+    return (
         type_probability_space,
         conn_probability_space,
         rotation_probability_space,
     )
-
-    # Save the graph to a file
-    save_graph_as_json(
-        graph,
-        DATA / "graph.json",
-    )
-
-    # Create the robot
-    robot = construct_mjspec_from_graph(graph)
-    run(robot)
 
 
 def run(
@@ -125,7 +147,7 @@ def run(
     # MuJoCo basics
     world = SimpleFlatWorld()
 
-    # Set random colors for geoms
+    # Set transparency for the robot geoms
     for i in range(len(robot.spec.geoms)):
         robot.spec.geoms[i].rgba[-1] = 0.5
 
@@ -193,7 +215,7 @@ def run(
             console.log(
                 f"#{generation} {member} {value} {weight_matrix.shape}",
             )
-        # optimizer.tell(solutions)
+        optimizer.tell(solutions)
 
     console.log(best_value)
 

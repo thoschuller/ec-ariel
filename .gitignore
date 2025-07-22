@@ -4,7 +4,6 @@
 # Dirs
 __data__
 _other_
-__data__
 .typings
 # Mujoco
 MUJOCO_LOG.TXT

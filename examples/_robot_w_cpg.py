@@ -115,13 +115,13 @@ def run(
     # BugFix -> "Python exception raised"
     mujoco.set_mjcb_control(None)
 
-    # MuJoCo configuration
-    viz_options = mujoco.MjvOption()  # visualization of various elements
+    # # MuJoCo configuration
+    # viz_options = mujoco.MjvOption()  # visualization of various elements
 
-    # Visualization of the corresponding model or decoration element
-    viz_options.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True
-    viz_options.flags[mujoco.mjtVisFlag.mjVIS_ACTUATOR] = True
-    viz_options.flags[mujoco.mjtVisFlag.mjVIS_BODYBVH] = True
+    # # Visualization of the corresponding model or decoration element
+    # viz_options.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True
+    # viz_options.flags[mujoco.mjtVisFlag.mjVIS_ACTUATOR] = True
+    # viz_options.flags[mujoco.mjtVisFlag.mjVIS_BODYBVH] = True
 
     # MuJoCo basics
     world = SimpleFlatWorld()

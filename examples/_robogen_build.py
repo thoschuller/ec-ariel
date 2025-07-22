@@ -204,13 +204,13 @@ def run(
 def main() -> None:
     """Entry point."""
     robot = DummyRobotTestCtrl()
-    run(robot)
+    run(robot, with_viewer=True)
 
     robot = DummyRobotTestRotate()
     run(robot, with_viewer=True)
 
     robot = DummyRobotTestAttach()
-    run(robot)
+    run(robot, with_viewer=True)
 
 
 if __name__ == "__main__":
