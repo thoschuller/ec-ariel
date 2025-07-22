@@ -1,2 +1,1 @@
-# ariel
-ARIEL: Autonomous Robots through Integrated Evolution and Learning
+# ARIEL: Autonomous Robots through Integrated Evolution and Learning
