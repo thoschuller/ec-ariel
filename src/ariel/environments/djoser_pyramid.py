@@ -4,6 +4,7 @@ Pyramid on top of flat terrain.
 
 Date:       2025-07-23
 Status:     Completed ✅
+References: mjspec.ipynb + chatG
 """
 
 
@@ -30,8 +31,7 @@ class StairsWorld:
         self.H_SIZE = 0.12
         self.H_STEP = self.H_SIZE * 2
         self.V_STEP = self.V_SIZE * 2
-        self.BROWN = [0.460, 0.362, 0.216, 1.0]
-
+        self.SAND = [0.85, 0.75, 0.60, 1.0]
         self.grid_loc = grid_loc
         self.num_stairs = num_stairs
         self.direction = direction
@@ -53,28 +53,11 @@ class StairsWorld:
 
         # --- Terrain ---
         grid_name = "grid"
-        spec.add_texture(
-            name=grid_name,
-            type=mujoco.mjtTexture.mjTEXTURE_2D,
-            builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-            rgb1=[0.1, 0.2, 0.3],
-            rgb2=[0.2, 0.3, 0.4],
-            width=600,
-            height=600,
-        )
-        spec.add_material(
-            name=grid_name,
-            textures=["", f"{grid_name}"],
-            texrepeat=[3, 3],
-            texuniform=True,
-            reflectance=0.2,
-        )
-        spec.worldbody.add_light(name="light", pos=[0, 0, 1], castshadow=False)
         spec.worldbody.add_geom(
-            name="floor",
+            name=grid_name,
             type=mujoco.mjtGeom.mjGEOM_PLANE,
-            material=grid_name,
             size=self.floor_size,
+            rgba=self.SAND,  # Use same color as stairs
         )
 
         # --- Stairs ---
@@ -85,8 +68,8 @@ class StairsWorld:
 
     def _build_stairs(self, spec: mujoco.MjSpec) -> None:
         """Build stair geometry above flat floor."""
-        z_offset = self.floor_size[2]  # Height of the floor
-        body = spec.worldbody.add_body(pos=self.grid_loc + [0], name=self.name)
+
+        body = spec.worldbody.add_body(pos=self.grid_loc+[0], name=self.name)
 
         x_beginning = -self.SQUARE_LENGTH + self.H_SIZE
         x_end = self.SQUARE_LENGTH - self.H_SIZE
@@ -113,10 +96,10 @@ class StairsWorld:
             y_pos_up[1] = y_beginning - self.H_STEP * i
             y_pos_down[1] = y_end + self.H_STEP * i
 
-            body.add_geom(pos=x_pos_l.copy(), size=size_one.copy(), rgba=self.BROWN)
-            body.add_geom(pos=x_pos_r.copy(), size=size_one.copy(), rgba=self.BROWN)
-            body.add_geom(pos=y_pos_up.copy(), size=size_two.copy(), rgba=self.BROWN)
-            body.add_geom(pos=y_pos_down.copy(), size=size_two.copy(), rgba=self.BROWN)
+            body.add_geom(pos=x_pos_l.copy(), size=size_one.copy(), rgba=self.SAND)
+            body.add_geom(pos=x_pos_r.copy(), size=size_one.copy(), rgba=self.SAND)
+            body.add_geom(pos=y_pos_up.copy(), size=size_two.copy(), rgba=self.SAND)
+            body.add_geom(pos=y_pos_down.copy(), size=size_two.copy(), rgba=self.SAND)
 
         top_size = [
             self.SQUARE_LENGTH - self.H_STEP * self.num_stairs,
@@ -124,7 +107,7 @@ class StairsWorld:
             self.V_SIZE,
         ]
         top_pos = [0, 0, self.direction * (self.V_SIZE + self.V_STEP * self.num_stairs)]
-        body.add_geom(pos=top_pos, size=top_size, rgba=self.BROWN)
+        body.add_geom(pos=top_pos, size=top_size, rgba=self.SAND)
 
     def spawn(
         self,
