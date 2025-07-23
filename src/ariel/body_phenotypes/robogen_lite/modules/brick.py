@@ -14,11 +14,11 @@ import numpy as np
 import quaternion as qnp
 
 # Local libraries
-from ariel.body_phenotypes.robogen_lite.config import (
+from src.ariel.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
     ModuleType,
 )
-from ariel.body_phenotypes.robogen_lite.modules.module import Module
+from src.ariel.body_phenotypes.robogen_lite.modules.module import Module
 
 # Type Aliases
 type WeightType = float

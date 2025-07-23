@@ -11,19 +11,19 @@ from typing import TYPE_CHECKING
 from networkx import Graph
 
 # Local libraries
-from ariel.body_phenotypes.robogen_lite.config import (
+from src.ariel.body_phenotypes.robogen_lite.config import (
     IDX_OF_CORE,
     ModuleFaces,
     ModuleRotationsTheta,
     ModuleType,
 )
-from ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
+from src.ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
+from src.ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from src.ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
 
 # Type checking
 if TYPE_CHECKING:
-    from ariel.body_phenotypes.robogen_lite.modules.module import Module
+    from src.ariel.body_phenotypes.robogen_lite.modules.module import Module
 
 
 def construct_mjspec_from_graph(graph: Graph) -> CoreModule:

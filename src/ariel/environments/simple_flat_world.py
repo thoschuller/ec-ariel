@@ -9,7 +9,7 @@ import mujoco
 import numpy as np
 
 # Local libraries
-from ariel.utils.mjspec_ops import compute_geom_bounding_box
+from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 # Global constants
 USE_DEGREES = False
