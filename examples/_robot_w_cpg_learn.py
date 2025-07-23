@@ -33,22 +33,22 @@ from mujoco import viewer
 from rich.console import Console
 
 # Local libraries
-from ariel.body_phenotypes.robogen_lite.config import (
+from src.ariel.body_phenotypes.robogen_lite.config import (
     NUM_OF_FACES,
     NUM_OF_ROTATIONS,
     NUM_OF_TYPES_OF_MODULES,
 )
-from ariel.body_phenotypes.robogen_lite.constructor import (
+from src.ariel.body_phenotypes.robogen_lite.constructor import (
     construct_mjspec_from_graph,
 )
-from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
+from src.ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
     save_graph_as_json,
 )
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
-from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.utils.runners import simple_runner
+from src.ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from src.ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
+from src.ariel.environments.simple_flat_world import SimpleFlatWorld
+from src.ariel.utils.runners import simple_runner
 
 if TYPE_CHECKING:
     from networkx import Graph

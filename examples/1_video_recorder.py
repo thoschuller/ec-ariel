@@ -15,9 +15,9 @@ from pathlib import Path
 import mujoco
 
 # Local libraries
-from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.utils.renderers import video_renderer
-from ariel.utils.video_recorder import VideoRecorder
+from src.ariel.environments.simple_flat_world import SimpleFlatWorld
+from src.ariel.utils.renderers import video_renderer
+from src.ariel.utils.video_recorder import VideoRecorder
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]

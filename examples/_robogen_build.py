@@ -24,15 +24,15 @@ import mujoco
 from mujoco import viewer
 from rich.console import Console
 
-from ariel.body_phenotypes.robogen_lite.config import (
+from src.ariel.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
     ModuleRotationsTheta,
 )
-from ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
-from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.utils.renderers import single_frame_renderer
+from src.ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
+from src.ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from src.ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
+from src.ariel.environments.simple_flat_world import SimpleFlatWorld
+from src.ariel.utils.renderers import single_frame_renderer
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
