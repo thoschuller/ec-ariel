@@ -1,3 +1,11 @@
+"""
+Tilted flat terrain with a specified tilt angle and axis.
+
+Date:       2025-07-28
+Status:     Completed ✅
+Author:     A-lamo (Aron F.)
+"""
+
 # Third-party libraries
 import mujoco
 import numpy as np
