@@ -1,6 +1,6 @@
 
 """
-Box on top of flat terrain.
+Boxes extrude from the ground to form a terrain.
 
 Date:       2025-07-28
 Author:     A-lamo (Aron F.)
