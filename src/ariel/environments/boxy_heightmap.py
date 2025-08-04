@@ -2,6 +2,8 @@
 """
 Boxes extrude from the ground to form a terrain.
 
+TODO: Parameters:
+
 Date:       2025-07-28
 Author:     A-lamo (Aron F.)
 References: mjspec.ipynb
@@ -22,7 +24,7 @@ from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
 USE_DEGREES = False
 
 
-class BoxyHeightmap:
+class BoxyRugged:
 
     def __init__(
         self, 
