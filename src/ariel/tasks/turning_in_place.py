@@ -1,6 +1,6 @@
 import numpy as np
 
-def turning_in_place(xy_history):
+def turning_in_place(xy_history) -> float:
     """
     Determines the total angle turned by a robot based on its path history.
 
