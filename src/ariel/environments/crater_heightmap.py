@@ -15,11 +15,11 @@ class CraterTerrainWorld:
     def __init__(
         self,
         size: Tuple[float, float] = (10.0, 10.0),
-        resolution: int = 64,
-        crater_depth: float = 5,
+        resolution: int = 128,
+        crater_depth: float = 3,
         crater_radius: float = 5,  
         height: float = 5,
-        ruggedness: float = 0.1,
+        ruggedness: float = 0.01,
     ):
         """
         Create a crater terrain heightfield.
