@@ -12,8 +12,8 @@ Status:     Completed ✅
 import mujoco
 
 # Local libraries
-from src.ariel.environments.simple_flat_world import SimpleFlatWorld
-from src.ariel.utils.renderers import single_frame_renderer
+from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.utils.renderers import single_frame_renderer
 
 
 def main() -> None:

@@ -37,7 +37,7 @@ from networkx import DiGraph, Graph
 from networkx.readwrite import json_graph
 
 # Local libraries
-from src.ariel.body_phenotypes.robogen_lite.config import (
+from ariel.body_phenotypes.robogen_lite.config import (
     ALLOWED_FACES,
     ALLOWED_ROTATIONS,
     IDX_OF_CORE,

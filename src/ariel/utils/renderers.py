@@ -26,7 +26,7 @@ import mujoco
 from PIL import Image
 from rich.console import Console
 
-from src.ariel.utils.video_recorder import VideoRecorder
+from ariel.utils.video_recorder import VideoRecorder
 
 # Global functions
 console = Console()

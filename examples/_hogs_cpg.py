@@ -25,7 +25,7 @@ Todo
 import matplotlib.pyplot as plt
 
 # Local libraries
-from src.ariel.controllers.hopfs_cpg import HopfCPG
+from ariel.controllers.hopfs_cpg import HopfCPG
 
 
 def main() -> None:

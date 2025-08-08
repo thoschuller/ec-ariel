@@ -14,11 +14,11 @@ import numpy as np
 import quaternion as qnp
 
 # Local libraries
-from src.ariel.body_phenotypes.robogen_lite.config import (
+from ariel.body_phenotypes.robogen_lite.config import (
     ModuleFaces,
     ModuleType,
 )
-from src.ariel.body_phenotypes.robogen_lite.modules.module import Module
+from ariel.body_phenotypes.robogen_lite.modules.module import Module
 
 # Global constants
 SHRINK = 0.99

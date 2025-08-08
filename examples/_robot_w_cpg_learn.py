@@ -33,22 +33,22 @@ from mujoco import viewer
 from rich.console import Console
 
 # Local libraries
-from src.ariel.body_phenotypes.robogen_lite.config import (
+from ariel.body_phenotypes.robogen_lite.config import (
     NUM_OF_FACES,
     NUM_OF_ROTATIONS,
     NUM_OF_TYPES_OF_MODULES,
 )
-from src.ariel.body_phenotypes.robogen_lite.constructor import (
+from ariel.body_phenotypes.robogen_lite.constructor import (
     construct_mjspec_from_graph,
 )
-from src.ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
+from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
     save_graph_as_json,
 )
-from src.ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from src.ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
-from src.ariel.environments.simple_flat_world import SimpleFlatWorld
-from src.ariel.utils.runners import simple_runner
+from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
+from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.utils.runners import simple_runner
 
 if TYPE_CHECKING:
     from networkx import Graph
@@ -166,7 +166,7 @@ def run(
     # Number of actuators and DoFs
     console.log(f"DoF (model.nv): {model.nv}, Actuators (model.nu): {model.nu}")
 
-    # What to track
+    # What to track (fitness function inputs should be bound here!)
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
@@ -200,10 +200,11 @@ def run(
                 duration=60,
             )
 
-            # Calculate displacement
+            # Calculate displacement (fitness function goes here!)
             value = np.sqrt(
                 np.sum(np.exp2(to_track[0].xpos - to_track[-1].xpos)),
             )
+            print(to_track[0].xpos, to_track[-1].xpos)
 
             solutions.append((weight_matrix, value))
 
