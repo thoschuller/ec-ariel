@@ -1,3 +1,5 @@
+![ariel-header](./docs/resources/ariel_header.svg)
+
 # Ariel: Autonomous Robots through Integrated Evolution and Learning
 
 ## TODO: Installation

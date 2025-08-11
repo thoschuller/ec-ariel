@@ -7,6 +7,9 @@ _other_
 .typings
 # Mujoco
 MUJOCO_LOG.TXT
+# DrawIo
+*.bkp
+ariel_header.svg
 ### PYTHON ######################################################################
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -219,6 +222,7 @@ Temporary Items
 # Scalable Vector Graphics
 *.svg
 *.svgz
+!ariel_header.svg
 # Portable Document Format
 *.pdf
 # X BitMap
