@@ -1,11 +1,5 @@
 # Ariel: Autonomous Robots through Integrated Evolution and Learning
 
-## Todo's
-
-- [ ] CMA only
-- [ ] Friction increase (what does rev2 do?)
-- [ ] Trimesh collision detect
-
 ## TODO: Installation
 
 ## Notes
