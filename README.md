@@ -8,7 +8,7 @@ This project uses [uv](https://docs.astral.sh/uv/).
 
 To run the code examples please do
 
-``bash
+```bash
 uv venv
 uv sync
 uv run examples/0_render_single_frame.py
