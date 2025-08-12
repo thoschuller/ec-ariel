@@ -2,6 +2,20 @@
 
 # Ariel: Autonomous Robots through Integrated Evolution and Learning
 
+## Installation and Running
+
+This project uses [uv](https://docs.astral.sh/uv/).
+
+To run the code examples please do
+
+``bash
+uv venv
+uv sync
+uv run examples/0_render_single_frame.py
+```
+
+---
+
 ## TODO: Installation
 
 ## Notes
