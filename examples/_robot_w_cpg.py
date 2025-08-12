@@ -50,7 +50,7 @@ from ariel.utils.renderers import video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 
 if TYPE_CHECKING:
-    from networkx import Graph
+    from networkx import DiGraph
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -89,7 +89,7 @@ def main() -> None:
 
     # Decode the high-probability graph
     hpd = HighProbabilityDecoder(num_modules)
-    graph: Graph[Any] = hpd.probability_matrices_to_graph(
+    graph: DiGraph[Any] = hpd.probability_matrices_to_graph(
         type_probability_space,
         conn_probability_space,
         rotation_probability_space,

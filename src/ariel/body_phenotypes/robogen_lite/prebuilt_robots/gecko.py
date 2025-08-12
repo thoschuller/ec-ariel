@@ -1,8 +1,8 @@
-from src.ariel.body_phenotypes.robogen_lite.config import ModuleFaces
-from src.ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from src.ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
-from src.ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
- 
+from ariel.body_phenotypes.robogen_lite.config import ModuleFaces
+from ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
+from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
+
 
 def gecko():
     """
@@ -49,8 +49,6 @@ def gecko():
     br_flipper = BrickModule(
         index=12,
     )
-
-    
 
     # Attach bodies
     core.sites[ModuleFaces.FRONT].attach_body(

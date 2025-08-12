@@ -1,15 +1,16 @@
-import numpy as np
-from noise import pnoise2
-import mujoco
 from typing import Tuple
 
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
+import mujoco
+import numpy as np
+from noise import pnoise2
+
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 USE_DEGREES = False
 TERRAIN_COLOR = [0.5, 0.4, 0.3, 1.0]
 
 
-class AmphitheaterTerrainWorld:
+class AmphitheatreTerrainWorld:
     """MuJoCo world with an amphitheater-shaped terrain."""
 
     def __init__(
@@ -71,18 +72,20 @@ class AmphitheaterTerrainWorld:
         heightmap = np.piecewise(
             r,
             [r <= r0, (r > r0) & (r <= r1), r > r1],
-            [0.0,
-             lambda r: d * (r - r0) / (r1 - r0),
-             d]
+            [0.0, lambda r: d * (r - r0) / (r1 - r0), d],
         )
 
         # Add Perlin noise for ruggedness
         if self.ruggedness > 0:
             freq = 4.0
             noise = np.fromfunction(
-                np.vectorize(lambda j, i: pnoise2(i / res * freq, j / res * freq, octaves=3)),
+                np.vectorize(
+                    lambda j, i: pnoise2(
+                        i / res * freq, j / res * freq, octaves=3
+                    )
+                ),
                 (res, res),
-                dtype=float
+                dtype=float,
             )
             noise = (noise - noise.min()) / (noise.max() - noise.min()) - 0.5
             heightmap += self.ruggedness * noise

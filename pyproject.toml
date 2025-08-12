@@ -9,18 +9,25 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "cmaes>=0.11.1",
+    "fast-perlin-noise>=1.1.2",
     "matplotlib>=3.10.3",
     "mujoco>=3.3.4",
     "mypy>=1.17.0",
     "networkx>=3.5",
     "numpy-quaternion>=2024.0.10",
     "opencv-python>=4.12.0.88",
+    "pandas-stubs>=2.3.0.250703",
     "pillow>=11.3.0",
     "pydantic>=2.11.7",
     "pytest>=8.4.1",
     "rich>=14.0.0",
     "ruff>=0.12.4",
     "trimesh[easy]>=4.7.1",
+    "types-beautifulsoup4>=4.12.0.20250516",
+    "types-bleach>=6.2.0.20250809",
+    "types-networkx>=3.5.0.20250809",
+    "types-pyyaml>=6.0.12.20250809",
+    "types-setuptools>=80.9.0.20250809",
 ]
 
 [build-system]

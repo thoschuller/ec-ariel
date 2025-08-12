@@ -11,13 +11,13 @@ import mujoco
 import numpy as np
 
 # Local libraries
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
-
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 # Global constants
 USE_DEGREES = False
 
-def quaternion_from_axis_angle(axis:str, angle_deg):
+
+def quaternion_from_axis_angle(axis: str, angle_deg):
     """Compute a unit quaternion from an axis and angle (degrees)."""
     if axis == "x":
         axis = [1, 0, 0]
@@ -35,6 +35,7 @@ def quaternion_from_axis_angle(axis:str, angle_deg):
 
     return [w, *xyz]
 
+
 class TiltedFlatWorld:
     """A simple MuJoCo world with a flat box floor tilted around the X, Y or Z axis."""
 
@@ -45,7 +46,7 @@ class TiltedFlatWorld:
         axis: str = "y",
     ):
         """Create a tilted flat world.
-        
+
         Parameters
         ----------
         floor_size : tuple[float, float, float], optional
@@ -82,7 +83,7 @@ class TiltedFlatWorld:
             width=600,  # pixels
             height=600,  # pixels
         )
-        
+
         spec.add_material(
             name=grid_name,
             textures=["", f"{grid_name}"],
@@ -92,18 +93,14 @@ class TiltedFlatWorld:
         )
 
         # Add a light
-        spec.worldbody.add_light(
-            name="light",
-            pos=[0, 0, 2],
-            castshadow=False
-        )
+        spec.worldbody.add_light(name="light", pos=[0, 0, 2], castshadow=False)
 
         # Add the tilted floor
         spec.worldbody.add_geom(
             name="tilted_floor",
             type=mujoco.mjtGeom.mjGEOM_PLANE,
             size=self.floor_size,
-            quat= quaternion_from_axis_angle(self.axis, self.tilt_degrees),
+            quat=quaternion_from_axis_angle(self.axis, self.tilt_degrees),
         )
 
         self.spec = spec
@@ -130,7 +127,7 @@ class TiltedFlatWorld:
         correct_for_bounding_box : bool, optional
             If True, the spawn position will be adjusted to account for the robot's bounding box,
             by default True
-        """       
+        """
 
         if spawn_position is None:
             spawn_position = [0, 0, 0]
@@ -144,14 +141,8 @@ class TiltedFlatWorld:
 
         spawn_position[2] += small_gap
 
-        site = self.spec.worldbody.add_site(
-            pos=np.array(spawn_position)
-        )
-        
-        attachment = site.attach_body(
-            body=mj_spec.worldbody,
-            prefix="robot-"
-        )
-        
-        attachment.add_freejoint()
+        site = self.spec.worldbody.add_site(pos=np.array(spawn_position))
 
+        attachment = site.attach_body(body=mj_spec.worldbody, prefix="robot-")
+
+        attachment.add_freejoint()

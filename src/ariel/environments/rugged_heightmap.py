@@ -1,9 +1,10 @@
-import numpy as np
-from noise import pnoise2
-import mujoco
 from typing import Tuple
 
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
+import mujoco
+import numpy as np
+from noise import pnoise2
+
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 USE_DEGREES = False
 TERRAIN_COLOR = [0.460, 0.362, 0.216, 1.0]
@@ -56,7 +57,8 @@ class RuggedTerrainWorld:
                     x / size * freq,
                     y / size * freq,
                     octaves=6,
-                ) * self.hillyness
+                )
+                * self.hillyness
             ),
             (size, size),
             dtype=float,

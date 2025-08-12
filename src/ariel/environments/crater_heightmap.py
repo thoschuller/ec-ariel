@@ -1,9 +1,10 @@
-import numpy as np
-import mujoco
 from typing import Tuple
+
+import mujoco
+import numpy as np
 from noise import pnoise2
 
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 USE_DEGREES = False
 TERRAIN_COLOR = [0.5, 0.4, 0.3, 1.0]
@@ -17,7 +18,7 @@ class CraterTerrainWorld:
         size: Tuple[float, float] = (10.0, 10.0),
         resolution: int = 128,
         crater_depth: float = 3,
-        crater_radius: float = 5,  
+        crater_radius: float = 5,
         height: float = 5,
         ruggedness: float = 0.01,
     ):
@@ -56,7 +57,7 @@ class CraterTerrainWorld:
 
         # Elliptical cone shape
         a = self.crater_radius
-        b = self.crater_radius 
+        b = self.crater_radius
 
         # Base conical height
         r = np.sqrt(((x - 0.5) / a) ** 2 + ((y - 0.5) / b) ** 2)
@@ -67,11 +68,17 @@ class CraterTerrainWorld:
             # Generate Perlin noise on same grid
             freq = 6  # adjust to control bump frequency
             noise = np.fromfunction(
-                np.vectorize(lambda j, i: pnoise2(i / res * freq, j / res * freq, octaves=3)),
+                np.vectorize(
+                    lambda j, i: pnoise2(
+                        i / res * freq, j / res * freq, octaves=3
+                    )
+                ),
                 (res, res),
-                dtype=float
+                dtype=float,
             )
-            noise = (noise - noise.min()) / (noise.max() - noise.min())  # Normalize to [0, 1]
+            noise = (noise - noise.min()) / (
+                noise.max() - noise.min()
+            )  # Normalize to [0, 1]
             noise -= 0.5  # Center at 0
 
             # Add scaled noise to the cone
@@ -81,8 +88,6 @@ class CraterTerrainWorld:
             heightmap = np.clip(heightmap, 0.0, 1.0)
 
         return heightmap
-
-
 
     def _build_spec(self) -> mujoco.MjSpec:
         """Create the MuJoCo spec with crater heightfield."""

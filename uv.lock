@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -40,35 +40,49 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cmaes" },
+    { name = "fast-perlin-noise" },
     { name = "matplotlib" },
     { name = "mujoco" },
     { name = "mypy" },
     { name = "networkx" },
     { name = "numpy-quaternion" },
     { name = "opencv-python" },
+    { name = "pandas-stubs" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pytest" },
     { name = "rich" },
     { name = "ruff" },
     { name = "trimesh", extra = ["easy"] },
+    { name = "types-beautifulsoup4" },
+    { name = "types-bleach" },
+    { name = "types-networkx" },
+    { name = "types-pyyaml" },
+    { name = "types-setuptools" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cmaes", specifier = ">=0.11.1" },
+    { name = "fast-perlin-noise", specifier = ">=1.1.2" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "mujoco", specifier = ">=3.3.4" },
     { name = "mypy", specifier = ">=1.17.0" },
     { name = "networkx", specifier = ">=3.5" },
     { name = "numpy-quaternion", specifier = ">=2024.0.10" },
     { name = "opencv-python", specifier = ">=4.12.0.88" },
+    { name = "pandas-stubs", specifier = ">=2.3.0.250703" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "rich", specifier = ">=14.0.0" },
     { name = "ruff", specifier = ">=0.12.4" },
     { name = "trimesh", extras = ["easy"], specifier = ">=4.7.1" },
+    { name = "types-beautifulsoup4", specifier = ">=4.12.0.20250516" },
+    { name = "types-bleach", specifier = ">=6.2.0.20250809" },
+    { name = "types-networkx", specifier = ">=3.5.0.20250809" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20250809" },
+    { name = "types-setuptools", specifier = ">=80.9.0.20250809" },
 ]
 
 [[package]]
@@ -238,6 +252,22 @@ epath = [
     { name = "importlib-resources" },
     { name = "typing-extensions" },
     { name = "zipp" },
+]
+
+[[package]]
+name = "fast-perlin-noise"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "strenum" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/03/7f/d1a1e2cf97f34d2ae03ca0396460522f93df487640a8b6a1b91140e2da96/fast_perlin_noise-1.1.2.tar.gz", hash = "sha256:d94a2e6f13b9841e328b1aebc2dbee28ebc71289562a31ea002fe058aac1ac95", size = 96292, upload-time = "2025-01-07T21:30:59.726Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/6f/4a1b82e8ba36c09864b0d3ad7781938bb4f4622663a2aca26d3ff876bc7f/fast_perlin_noise-1.1.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:530897c34efbd25c2d93a582d71f1e8c6f9c7882b730151e1cc6b1d88a9c142d", size = 788942, upload-time = "2025-01-07T21:32:23.843Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/a5/dc9e35c16d31acd105f57d7ca888aeb9407d8a0c690a2087998af7b079e2/fast_perlin_noise-1.1.2-cp312-cp312-win_amd64.whl", hash = "sha256:204f5679e67213f38aa164584dc00e2c8c050c52d3d27cf698fcdd174093dc2c", size = 814389, upload-time = "2025-01-07T21:35:10.769Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/24/0649b4a17c9fdb0705cab4a95516b240e95bcbf71b1776e3bdda19916cf0/fast_perlin_noise-1.1.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:ae3b0ea5ba1161baaed179bb2b679b0318d4a95e336be632390ba6cd281c244d", size = 788944, upload-time = "2025-01-07T21:32:26.531Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/a9/b45babe50c9938343f115410e51b54a0ded7ab3a45a0fae46c796644cd5d/fast_perlin_noise-1.1.2-cp313-cp313-win_amd64.whl", hash = "sha256:59c0b798aa08cb2d6ee014347292517ca27b59289257ef5d35952f95246298cb", size = 814246, upload-time = "2025-01-07T21:35:14.356Z" },
 ]
 
 [[package]]
@@ -734,6 +764,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pandas-stubs"
+version = "2.3.0.250703"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "types-pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ec/df/c1c51c5cec087b8f4d04669308b700e9648745a77cdd0c8c5e16520703ca/pandas_stubs-2.3.0.250703.tar.gz", hash = "sha256:fb6a8478327b16ed65c46b1541de74f5c5947f3601850caf3e885e0140584717", size = 103910, upload-time = "2025-07-02T17:49:11.667Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/cb/09d5f9bf7c8659af134ae0ffc1a349038a5d0ff93e45aedc225bde2872a3/pandas_stubs-2.3.0.250703-py3-none-any.whl", hash = "sha256:a9265fc69909f0f7a9cabc5f596d86c9d531499fed86b7838fd3278285d76b81", size = 154719, upload-time = "2025-07-02T17:49:10.697Z" },
+]
+
+[[package]]
 name = "pathspec"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1179,6 +1222,15 @@ wheels = [
 ]
 
 [[package]]
+name = "strenum"
+version = "0.4.15"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/ad/430fb60d90e1d112a62ff57bdd1f286ec73a2a0331272febfddd21f330e1/StrEnum-0.4.15.tar.gz", hash = "sha256:878fb5ab705442070e4dd1929bb5e2249511c0bcf2b0eeacf3bcd80875c82eff", size = 23384, upload-time = "2023-06-29T22:02:58.399Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/69/297302c5f5f59c862faa31e6cb9a4cd74721cd1e052b38e464c5b402df8b/StrEnum-0.4.15-py3-none-any.whl", hash = "sha256:a30cda4af7cc6b5bf52c8055bc4bf4b2b6b14a93b574626da33df53cf7740659", size = 8851, upload-time = "2023-06-29T22:02:56.947Z" },
+]
+
+[[package]]
 name = "svg-path"
 version = "7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1218,6 +1270,78 @@ easy = [
     { name = "svg-path" },
     { name = "vhacdx" },
     { name = "xxhash" },
+]
+
+[[package]]
+name = "types-beautifulsoup4"
+version = "4.12.0.20250516"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-html5lib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/d1/32b410f6d65eda94d3dfb0b3d0ca151f12cb1dc4cef731dcf7cbfd8716ff/types_beautifulsoup4-4.12.0.20250516.tar.gz", hash = "sha256:aa19dd73b33b70d6296adf92da8ab8a0c945c507e6fb7d5db553415cc77b417e", size = 16628, upload-time = "2025-05-16T03:09:09.93Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/79/d84de200a80085b32f12c5820d4fd0addcbe7ba6dce8c1c9d8605e833c8e/types_beautifulsoup4-4.12.0.20250516-py3-none-any.whl", hash = "sha256:5923399d4a1ba9cc8f0096fe334cc732e130269541d66261bb42ab039c0376ee", size = 16879, upload-time = "2025-05-16T03:09:09.051Z" },
+]
+
+[[package]]
+name = "types-bleach"
+version = "6.2.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-html5lib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/50/f85660f9893da1a2cea3e14675c9ab4a75f2a5c12a8ab79de959e5f3f2ad/types_bleach-6.2.0.20250809.tar.gz", hash = "sha256:188d7a1119f6c953140b513ed57ba4213755695815472c19d0c22ac09c79b90b", size = 11216, upload-time = "2025-08-09T03:16:46.876Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/41/51075b7c9fd62f8ea636e6ca619ca25e5617c066a1a19d12e2f7d9343edb/types_bleach-6.2.0.20250809-py3-none-any.whl", hash = "sha256:0b372a75117947d9ac8a31ae733fd0f8d92ec75c4772e7b37093ba3fa5b48fb9", size = 11968, upload-time = "2025-08-09T03:16:46.174Z" },
+]
+
+[[package]]
+name = "types-html5lib"
+version = "1.1.11.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/ab/6aa4c487ae6f4f9da5153143bdc9e9b4fbc2b105df7ef8127fb920dc1f21/types_html5lib-1.1.11.20250809.tar.gz", hash = "sha256:7976ec7426bb009997dc5e072bca3ed988dd747d0cbfe093c7dfbd3d5ec8bf57", size = 16793, upload-time = "2025-08-09T03:14:20.819Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/05/328a2d6ecbd8aa3e16512600da78b1fe4605125896794a21824f3cac6f14/types_html5lib-1.1.11.20250809-py3-none-any.whl", hash = "sha256:e5f48ab670ae4cdeafd88bbc47113d8126dcf08318e0b8d70df26ecc13eca9b6", size = 22867, upload-time = "2025-08-09T03:14:20.048Z" },
+]
+
+[[package]]
+name = "types-networkx"
+version = "3.5.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/07/76/10a8dbed596a71e2b568e51e26fc0aa0c43ba96405b4b2dfd2f401d967ce/types_networkx-3.5.0.20250809.tar.gz", hash = "sha256:c24a7ca01ad742ddf7b9e5552904db0ae7175426d48f5d2c058c87820cfb7bb5", size = 66310, upload-time = "2025-08-09T03:16:33.733Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/36/669307f85f5ae75f8bd0bdeaa271504f657941b8b9b6fc5ae37ebcd07fdb/types_networkx-3.5.0.20250809-py3-none-any.whl", hash = "sha256:692271e3a6a994242d5216761f41e2d34cb7998ed2661834d491b58a6a1dcaa2", size = 153529, upload-time = "2025-08-09T03:16:32.79Z" },
+]
+
+[[package]]
+name = "types-pytz"
+version = "2025.2.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/e2/c774f754de26848f53f05defff5bb21dd9375a059d1ba5b5ea943cf8206e/types_pytz-2025.2.0.20250809.tar.gz", hash = "sha256:222e32e6a29bb28871f8834e8785e3801f2dc4441c715cd2082b271eecbe21e5", size = 10876, upload-time = "2025-08-09T03:14:17.453Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/d0/91c24fe54e565f2344d7a6821e6c6bb099841ef09007ea6321a0bac0f808/types_pytz-2025.2.0.20250809-py3-none-any.whl", hash = "sha256:4f55ed1b43e925cf851a756fe1707e0f5deeb1976e15bf844bcaa025e8fbd0db", size = 10095, upload-time = "2025-08-09T03:14:16.674Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/21/52ffdbddea3c826bc2758d811ccd7f766912de009c5cf096bd5ebba44680/types_pyyaml-6.0.12.20250809.tar.gz", hash = "sha256:af4a1aca028f18e75297da2ee0da465f799627370d74073e96fee876524f61b5", size = 17385, upload-time = "2025-08-09T03:14:34.867Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/3e/0346d09d6e338401ebf406f12eaf9d0b54b315b86f1ec29e34f1a0aedae9/types_pyyaml-6.0.12.20250809-py3-none-any.whl", hash = "sha256:032b6003b798e7de1a1ddfeefee32fac6486bdfe4845e0ae0e7fb3ee4512b52f", size = 20277, upload-time = "2025-08-09T03:14:34.055Z" },
+]
+
+[[package]]
+name = "types-setuptools"
+version = "80.9.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/4f/d78a04083ee3cc0a7c14406afb2f1e7b63e70da95b777571d665d89b1765/types_setuptools-80.9.0.20250809.tar.gz", hash = "sha256:e986ba37ffde364073d76189e1d79d9928fb6f5278c7d07589cde353d0218864", size = 41209, upload-time = "2025-08-09T03:14:24.977Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/1d/ad4fd409b377904324cbd2dc3a11e29ba13e2cf603c5a14cd88a35da5be0/types_setuptools-80.9.0.20250809-py3-none-any.whl", hash = "sha256:7c6539b4c7ac7b4ab4db2be66d8a58fb1e28affa3ee3834be48acafd94f5976a", size = 63160, upload-time = "2025-08-09T03:14:23.639Z" },
 ]
 
 [[package]]

@@ -1,4 +1,3 @@
-
 """
 Boxes extrude from the ground to form a terrain.
 
@@ -11,27 +10,25 @@ Status:     Completed ✅
 
 """
 
-
 # Third-party libraries
+import random
+
 import mujoco as mj
 import numpy as np
-import random 
 
 # Local libraries
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 # Global constants
 USE_DEGREES = False
 
 
 class BoxyRugged:
-
     def __init__(
-        self, 
+        self,
         floor_size: tuple[float, float, float] = (10, 10, 0.05),
         pos: list[float] = [0, 0, 0],
     ) -> None:
-        
         """
         Effectively creates a boxy terrain in the specified location.
         """
@@ -74,7 +71,6 @@ class BoxyRugged:
             castshadow=False,
         )
 
-
         SQUARE_LENGTH = 2
         CUBE_LENGTH = 0.05
         GRID_SIZE = int(SQUARE_LENGTH / CUBE_LENGTH)
@@ -82,7 +78,7 @@ class BoxyRugged:
         BROWN = [0.460, 0.362, 0.216, 1.0]
 
         if spec == None:
-            spec=mj.MjSpec()
+            spec = mj.MjSpec()
 
         # Defaults
         main = spec.default
@@ -96,15 +92,15 @@ class BoxyRugged:
         for i in range(GRID_SIZE):
             for j in range(GRID_SIZE):
                 body.add_geom(
-                    pos=[x_beginning + i * STEP ,
-                        y_beginning - j * STEP ,
-                        random.randint(-1, 1) * CUBE_LENGTH
+                    pos=[
+                        x_beginning + i * STEP,
+                        y_beginning - j * STEP,
+                        random.randint(-1, 1) * CUBE_LENGTH,
                     ],
                     size=[CUBE_LENGTH] * 3,
-                    rgba=BROWN
-        )
+                    rgba=BROWN,
+                )
         self.spec = spec
-
 
     def spawn(
         self,

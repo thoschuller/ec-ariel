@@ -32,18 +32,17 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     save_graph_as_json,
 )
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.environments.amphiteater_heightmap import AmphitheaterTerrainWorld
-from ariel.environments.rugged_heightmap import RuggedTerrainWorld
+from ariel.environments.amphiteater_heightmap import AmphitheatreTerrainWorld
 from ariel.environments.boxy_heightmap import BoxyRugged
 from ariel.environments.crater_heightmap import CraterTerrainWorld
-from ariel.environments.simple_tilted_world import TiltedFlatWorld
 from ariel.environments.djoser_pyramid import PyramidWorld
-
+from ariel.environments.rugged_heightmap import RuggedTerrainWorld
+from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.environments.simple_tilted_world import TiltedFlatWorld
 from ariel.utils.renderers import single_frame_renderer
 
 if TYPE_CHECKING:
-    from networkx import Graph
+    from networkx import DiGraph
 
 # Global constants
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -82,7 +81,7 @@ def main() -> None:
 
     # Decode the high-probability graph
     hpd = HighProbabilityDecoder(num_modules)
-    graph: Graph[Any] = hpd.probability_matrices_to_graph(
+    graph: DiGraph[Any] = hpd.probability_matrices_to_graph(
         type_probability_space,
         conn_probability_space,
         rotation_probability_space,
@@ -116,7 +115,7 @@ def run(
     viz_options.flags[mujoco.mjtVisFlag.mjVIS_BODYBVH] = True
 
     # MuJoCo basics
-    world = AmphitheaterTerrainWorld()
+    world = AmphitheatreTerrainWorld()
 
     # Set random colors for geoms
     for i in range(len(robot.spec.geoms)):

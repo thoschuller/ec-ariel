@@ -12,9 +12,8 @@ Status:     Completed ✅
 import mujoco
 import numpy as np
 
-
 # Local libraries
-from src.ariel.utils.mjspec_ops import compute_geom_bounding_box
+from ariel.utils.mjspec_ops import compute_geom_bounding_box
 
 # Global constants
 USE_DEGREES = False
@@ -39,7 +38,7 @@ class PyramidWorld:
         floor_size : tuple[float, float, float], optional
             The size of the floor geom, by default (1, 1, 0.1)
         """
-                
+
         self.SQUARE_LENGTH = 2
         self.V_SIZE = 0.076
         self.H_SIZE = 0.12
@@ -117,7 +116,9 @@ class PyramidWorld:
             body.add_geom(pos=x_pos_l.copy(), size=size_one.copy(), rgba=color)
             body.add_geom(pos=x_pos_r.copy(), size=size_one.copy(), rgba=color)
             body.add_geom(pos=y_pos_up.copy(), size=size_two.copy(), rgba=color)
-            body.add_geom(pos=y_pos_down.copy(), size=size_two.copy(), rgba=color)
+            body.add_geom(
+                pos=y_pos_down.copy(), size=size_two.copy(), rgba=color
+            )
 
         # Final top platform stays same color (optional: pick RED/BLUE or a third color)
         top_color = RED if self.num_stairs % 2 == 0 else BLUE
@@ -126,7 +127,11 @@ class PyramidWorld:
             self.SQUARE_LENGTH - self.H_STEP * self.num_stairs,
             self.V_SIZE,
         ]
-        top_pos = [0, 0, self.gap * (self.V_SIZE + self.V_STEP * self.num_stairs)]
+        top_pos = [
+            0,
+            0,
+            self.gap * (self.V_SIZE + self.V_STEP * self.num_stairs),
+        ]
         body.add_geom(pos=top_pos, size=top_size, rgba=top_color)
 
     def spawn(
