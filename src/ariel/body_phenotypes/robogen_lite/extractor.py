@@ -1,9 +1,9 @@
 import mujoco
 import numpy as np
 
-class MujocoCoreExtractor:
-    """Extractor for core geoms in a Mujoco simulation."""
-    
+class RoboGenCoreExtractor:
+    """Extractor for core geoms in a Mujoco simulation with RoboGenLite robots."""
+
     def __init__(self, model, data, world):
         self.model = model
         self.data = data
