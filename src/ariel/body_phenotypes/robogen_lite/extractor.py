@@ -23,13 +23,13 @@ class RoboGenCoreExtractor:
         xy_history = np.array([geom.xpos for geom in to_track])
         return xy_history
 
-    def get_xyz_first_final_core(self) -> tuple[np.ndarray, np.ndarray]:
+    def xyz_displacement_extractor(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the first and last core geom xpos for displacement calculation."""
         core_path = self.get_core_path()
 
         return core_path[0], core_path[-1] if core_path.size > 0 else (None, None)
 
-    def get_xy_first_final_core(self) -> tuple[np.ndarray, np.ndarray]:
+    def xy_displacement_extractor(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the first and last core geom (x,y)-position for displacement calculation."""
         core_path = self.get_core_path()
 
