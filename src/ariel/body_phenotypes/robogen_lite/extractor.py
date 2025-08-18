@@ -1,0 +1,37 @@
+import mujoco
+import numpy as np
+
+class MujocoCoreExtractor:
+    """Extractor for core geoms in a Mujoco simulation."""
+    
+    def __init__(self, model, data, world):
+        self.model = model
+        self.data = data
+        self.world = world
+        self.geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
+
+    def track_core_geoms(self) -> list:
+        """Extract core geoms from mujoco data."""
+        return [self.data.bind(geom) for geom in self.geoms if "core" in geom.name]
+
+    def get_core_path(self) -> np.ndarray:
+        """Get the path of core geoms -> [xpos, xpos, ...]"""
+        to_track = self.track_core_geoms()
+        if not to_track:
+            return np.array([])
+
+        xy_history = np.array([geom.xpos for geom in to_track])
+        return xy_history
+
+    def get_xyz_first_final_core(self) -> tuple[np.ndarray, np.ndarray]:
+        """Get the first and last core geom xpos for displacement calculation."""
+        core_path = self.get_core_path()
+
+        return core_path[0], core_path[-1] if core_path.size > 0 else (None, None)
+
+    def get_xy_first_final_core(self) -> tuple[np.ndarray, np.ndarray]:
+        """Get the first and last core geom (x,y)-position for displacement calculation."""
+        core_path = self.get_core_path()
+
+        return core_path[0, :2], core_path[-1, :2] if core_path.size > 0 else (None, None)
+    
