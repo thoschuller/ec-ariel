@@ -17,8 +17,21 @@ from ariel.utils.mjspec_ops import compute_geom_bounding_box
 USE_DEGREES = False
 
 
-def quaternion_from_axis_angle(axis: str, angle_deg):
-    """Compute a unit quaternion from an axis and angle (degrees)."""
+def quaternion_from_axis_angle(axis: str, angle_deg) -> list[float]:
+    """Compute a unit quaternion from an axis and angle (degrees).
+    
+    Parameters
+    ----------
+    axis : str
+        The axis to rotate around, can be "x", "y", or "z".
+    angle_deg : float
+        The angle to rotate around the axis, in degrees.
+
+    Returns 
+    -------
+    list[float]
+        A unit quaternion representing the rotation.
+    """
     if axis == "x":
         axis = [1, 0, 0]
     elif axis == "y":

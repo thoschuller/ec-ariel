@@ -38,7 +38,7 @@ from numpy import typing as npt
 
 
 class VideoRecorder:
-    """Simple video recorder."""
+    """Simple video recorder for ariel."""
 
     # Encoding: 'mp4v' or 'avc1' for H.264
     _video_encoding: str = "mp4v"
@@ -53,7 +53,21 @@ class VideoRecorder:
         height: int = 480,
         fps: int = 30,
     ) -> None:
-        """Create a video recording."""
+        """Create a video recording.
+
+        Parameters
+        ----------
+        file_name : str
+            Name of the video file.
+        output_folder : str | Path | None
+            Folder where the video will be saved. If None, saves to current directory.
+        width : int
+            Width of the video frames.
+        height : int
+            Height of the video frames.
+        fps : int
+            Frames per second for the video.
+        """
         # Save local variables
         self.width = width
         self.height = height
@@ -91,7 +105,13 @@ class VideoRecorder:
         self.video_writer = video_writer
 
     def write(self, frame: npt.ArrayLike) -> None:
-        """Write MuJoCo frame to video."""
+        """Write MuJoCo frame to video.
+
+        Parameters
+        ----------
+        frame : npt.ArrayLike
+            Frame to write to the video.
+        """
         # Convert PIL Image to numpy array (OpenCV uses BGR format)
         opencv_image = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
 

@@ -26,16 +26,16 @@ class RuggedTerrainWorld:
 
         Parameters
         ----------
-        size : tuple of float
-            Physical size of the terrain in (x, y).
-        resolution : int
-            Resolution of the heightmap (square grid).
-        scale : float
-            Frequency scale for Perlin noise.
-        hillyness : float
-            Amplitude scaling for height.
-        height : float
-            Maximum height of terrain.
+        size : Tuple[float, float], optional
+            The size of the terrain in meters, by default (10.0, 10.0)
+        resolution : int, optional
+            The resolution of the heightmap, by default 128
+        scale : float, optional
+            The scale of the Perlin noise, by default 8.0
+        hillyness : float, optional
+            The hillyness factor for the terrain, by default 10.0
+        height : float, optional
+            The base height of the terrain, by default 0.5
         """
         self.size = size
         self.resolution = resolution
@@ -47,7 +47,13 @@ class RuggedTerrainWorld:
         self.spec = self._build_spec()
 
     def _generate_heightmap(self) -> np.ndarray:
-        """Generate Perlin-based terrain and normalize to [0, 1]."""
+        """Generate Perlin-based terrain and normalize to [0, 1].
+        
+        Returns
+        -------
+        np.ndarray
+            The generated heightmap as a 2D numpy array.
+        """
         size = self.resolution
         freq = self.scale
 
@@ -69,7 +75,13 @@ class RuggedTerrainWorld:
         return noise
 
     def _build_spec(self) -> mujoco.MjSpec:
-        """Create MjSpec with the heightfield and terrain geometry."""
+        """Create MjSpec with the heightfield and terrain geometry.
+        
+        Returns
+        -------
+        mujoco.MjSpec
+            The MuJoCo specification for the rugged terrain.
+        """
         spec = mujoco.MjSpec()
 
         spec.option.integrator = int(mujoco.mjtIntegrator.mjINT_IMPLICITFAST)
@@ -118,7 +130,19 @@ class RuggedTerrainWorld:
         small_gap: float = 0.0,
         correct_for_bounding_box: bool = True,
     ) -> None:
-        """Spawn a robot into the terrain world."""
+        """Spawn a robot into the terrain world.
+        
+        Parameters
+        ----------
+        mj_spec : mujoco.MjSpec
+            The MuJoCo specification for the robot.
+        spawn_position : list[float] | None, optional
+            The position to spawn the robot, by default None (origin).
+        small_gap : float, optional
+            A small gap to add above the terrain, by default 0.0
+        correct_for_bounding_box : bool, optional
+            Whether to adjust the spawn position based on the bounding box, by default True
+        """
         if spawn_position is None:
             spawn_position = [0.0, 0.0, 0.0]
 

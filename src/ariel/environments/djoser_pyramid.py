@@ -31,12 +31,20 @@ class PyramidWorld:
         floor_size: tuple[float, float, float] = (10, 10, 0.05),
     ) -> None:
         """
-        Create a basic specification for MuJoCo.
+        Create a basic specification for a pyramid world in MuJoCo.
 
         Parameters
         ----------
+        pos : list[float], optional
+            The position of the stairs, by default [0, 0, 0]
+        num_stairs : int, optional
+            The number of stairs, by default 8
+        gap : int, optional 
+            The gap between stairs, by default 1
+        name : str, optional
+            The name of the stairs, by default "stair".
         floor_size : tuple[float, float, float], optional
-            The size of the floor geom, by default (1, 1, 0.1)
+            The size of the floor geom, by default (10, 10, 0.05)
         """
 
         self.SQUARE_LENGTH = 2

@@ -60,6 +60,16 @@ class CPGSensoryFeedback:
         np.ndarray[tuple[int, ...], np.dtype[Any]],
         np.ndarray[tuple[int, ...], np.dtype[Any]],
     ]:
+        """Perform a single step of the CPG dynamics.
+        
+        Returns
+        -------
+        x : np.ndarray[tuple[int, ...], np.dtype[Any]]
+            The x state of the CPG neurons after the step.
+        y : np.ndarray[tuple[int, ...], np.dtype[Any]]
+            The y state of the CPG neurons after the step."""    
+            
+    
         # Useful simplification
         r_squared = self.x**2 + self.y**2
 
@@ -88,6 +98,20 @@ class CPGSensoryFeedback:
         np.ndarray[tuple[int, ...], np.dtype[Any]],
         np.ndarray[tuple[int, ...], np.dtype[Any]],
     ]:
+        """Run the CPG simulation for a given number of steps.
+
+        Parameters
+        ----------
+        steps : int
+            The number of simulation steps to perform.
+
+        Returns
+        -------
+        x_history : np.ndarray[tuple[int, ...], np.dtype[Any]]
+            History of x states over the simulation.
+        y_history : np.ndarray[tuple[int, ...], np.dtype[Any]]
+            History of y states over the simulation."""
+
         # Main simulation
         x_history = np.zeros((steps, self.num_neurons))
         y_history = np.zeros((steps, self.num_neurons))
