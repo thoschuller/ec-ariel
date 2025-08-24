@@ -31,13 +31,6 @@ class BoxyRugged:
     ) -> None:
         """
         Effectively creates a boxy terrain in the specified location.
-        
-        Parameters
-        ----------
-        floor_size : tuple[float, float, float], optional
-            The size of the floor geom, by default (10, 10, 0.05)
-        pos : list[float], optional
-            The position of the terrain in the world, by default [0, 0, 0]
         """
         grid_name = "boxy_grid"
         self.floor_size = floor_size

@@ -79,15 +79,6 @@ class HopfCPG:
     def step(
         self,
     ) -> tuple[ArrayLike, ArrayLike]:
-        """Perform a single step of the CPG dynamics.
-
-        Returns
-        -------
-        x : np.ndarray[tuple[int, ...], np.dtype[Any]]
-            The x state of the CPG neurons after the step.
-        y : np.ndarray[tuple[int, ...], np.dtype[Any]]
-            The y state of the CPG neurons after the step."""
-        
         # Define new state variables
         new_x = np.zeros_like(self.x)
         new_y = np.zeros_like(self.y)
@@ -136,21 +127,6 @@ class HopfCPG:
         self,
         steps: int,
     ) -> tuple[ArrayLike, ArrayLike]:
-        
-        """Run the CPG simulation for a specified number of steps.
-
-        Parameters
-        ----------
-        steps : int
-            The number of simulation steps to perform.
-
-        Returns
-        -------
-        x_history : np.ndarray[tuple[int, ...], np.dtype[Any]]
-            The history of x states over the simulation.
-        y_history : np.ndarray[tuple[int, ...], np.dtype[Any]]
-            The history of y states over the simulation."""
-
         # Main simulation
         x_history: ArrayLike = np.zeros((steps, self.num_neurons))
         y_history: ArrayLike = np.zeros((steps, self.num_neurons))

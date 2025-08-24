@@ -32,7 +32,7 @@ class CraterTerrainWorld:
         resolution : int
             Heightmap resolution.
         crater_depth : float
-            Maximum depth of the crater (0-1).
+            Maximum depth of the crater (0–1).
         crater_radius : float
             Crater radius (in normalized grid units, max 0.5).
         height : float
@@ -49,13 +49,7 @@ class CraterTerrainWorld:
         self.spec = self._build_spec()
 
     def _generate_heightmap(self) -> np.ndarray:
-        """Generate a rugged conical bowl using radial slope + Perlin noise.
-
-        Returns
-        -------
-        np.ndarray
-            Numpy array of normalized heightmap.
-        """
+        """Generate a rugged conical bowl using radial slope + Perlin noise."""
         res = self.resolution
         y, x = np.mgrid[0:res, 0:res]
         x = x / res
@@ -96,12 +90,7 @@ class CraterTerrainWorld:
         return heightmap
 
     def _build_spec(self) -> mujoco.MjSpec:
-        """Create the MuJoCo spec with crater heightfield.
-        
-        Returns
-        -------
-        mujoco.MjSpec
-            The MuJoCo specification for the crater terrain heightfield."""
+        """Create the MuJoCo spec with crater heightfield."""
         spec = mujoco.MjSpec()
 
         spec.option.integrator = int(mujoco.mjtIntegrator.mjINT_IMPLICITFAST)
@@ -148,19 +137,7 @@ class CraterTerrainWorld:
         small_gap: float = 0.0,
         correct_for_bounding_box: bool = True,
     ) -> None:
-        """Spawn a robot into the crater world.
-        
-        Parameters
-        ----------
-        mj_spec : mujoco.MjSpec
-            The MuJoCo specification for the robot.
-        spawn_position : list[float] | None, optional
-            The position to spawn the robot, by default None (origin).
-        small_gap : float, optional
-            Small gap to add above the terrain, by default 0.0
-        correct_for_bounding_box : bool, optional
-            Whether to adjust the spawn position based on the bounding box, by default True
-        """
+        """Spawn a robot into the crater world."""
         if spawn_position is None:
             spawn_position = [0.0, 0.0, 0.0]
 
