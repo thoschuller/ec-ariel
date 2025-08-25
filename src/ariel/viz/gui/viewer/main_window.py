@@ -18,12 +18,15 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PyQt5.QtWidgets import QPushButton, QGraphicsProxyWidget
+from PyQt5.QtWidgets import QLineEdit, QComboBox
+from QNodeEditor.node import Node
 
 # ENUMS as a base
 
 # Import the backend components
 from ariel.simulation.environments.__init__ import __all__ as envs
-from ariel.simulation.tasks.__init__ import __all__ as ffs, tasks, _task_fitness_function_map_
+from ariel.simulation.tasks.__init__ import _task_fitness_function_map_
 from ariel.simulation.controllers import *
 
 # ========================
@@ -50,7 +53,7 @@ class GenotypeNode(Node):
 
     def create(self):
         self.title = "Select Genotype"
-        self.add_combo_box_entry("Genotype", items=["Direct", "Compositional Pattern Producing Network (CPPN)"])
+        self.add_combo_box_entry("Genotype", items=["Integer", "Compositional Pattern Producing Network (CPPN)"])
         self.add_label_output("Selected Genotype")
 
     def evaluate(self, values: dict):
@@ -75,7 +78,7 @@ class TaskNode(Node):
 
     def create(self):
         self.title = "Select Task"
-        self.add_combo_box_entry("Task", items=tasks)
+        self.add_combo_box_entry("Task", items=_task_fitness_function_map_.keys())
         self.add_label_output("Selected Task")  # output socket
 
     def evaluate(self, values: dict):
@@ -168,45 +171,106 @@ class SurvivorSelectionNode(Node):
         self.set_output_value("Selected Survivor Selection", survivor_selection)
         return survivor_selection
 
+# ----------------------------
+# EA Parameters Node
+# ----------------------------
+
 class EAParametersNode(Node):
-    code=422
+    code = 422
 
     def create(self):
         self.title = "EA Parameters"
-        self.add_line_edit_entry("Population Size", "100")
-        self.add_line_edit_entry("Generations", "50")
-        self.add_line_edit_entry("Mutation Rate", "0.01")
-        self.add_line_edit_entry("Crossover Rate", "0.7")
-        self.add_label_output("EA Parameters")
-    
-    def evaluate(self, values: dict):
-        params = {
-            "Population Size": int(self.entries_dict["Population Size"].get_value()),
-            "Generations": int(self.entries_dict["Generations"].get_value()),
-            "Mutation Rate": float(self.entries_dict["Mutation Rate"].get_value()),
-            "Crossover Rate": float(self.entries_dict["Crossover Rate"].get_value()),
-        }
-        self.set_output_value("EA Parameters", params)
-        return params
-    
 
+        # Outputs only the parameters needed by EA
+        self.add_value_output("Population Size")
+        self.add_value_output("Generations")
+
+        # # Add line edit entries to actually set them
+        self.add_value_entry("Population Size", "100")
+        self.add_value_entry("Generations", "50")
+
+        self.entries_dict = {entry.name: entry for entry in self.entries}
+
+    def evaluate(self, values: dict):
+        # Fetch values from line edits
+        pop_size = int(self.entries_dict["Population Size"].get_value())
+        generations = int(self.entries_dict["Generations"].get_value())
+
+        # Store outputs for input nodes to fetch
+        self.set_output_value("Population Size", pop_size)
+        self.set_output_value("Generations", generations)
+
+        return {"Population Size": pop_size, "Generations": generations}
+
+
+# ========================
+# EA Run Node
+# ========================
 class EARun(Node):
     code = 999
 
     def create(self):
-        self.title = "Output"
-        self.add_label_input("Result")
+        self.title = "Run EA"
+
+        # Add input sockets for all configurable values
+        input_names = [
+            "Phenotype", "Genotype", "Environment", "Task",
+            "Fitness Function", "Mutation", "Crossover",
+            "Parent Selection", "Survivor Selection",
+            "pop_size", "generations"
+        ]
+        for name in input_names:
+            self.add_value_input(name)
 
     def evaluate(self, values: dict):
-        value = self.get_input_value("Result")
-        self.set_output_value("Result", value)
-        self.result = value
-        return value
+        # Automatically fetch values from connected nodes
+        pop_size = self.fetch_input_value("pop_size")
+        generations = self.fetch_input_value("generations")
+        phenotype = self.fetch_input_value("Phenotype")
+        genotype = self.fetch_input_value("Genotype")
+        environment = self.fetch_input_value("Environment")
+        task = self.fetch_input_value("Task")
+        fitness_functions = self.fetch_input_value("Fitness Function")
+        mutation = self.fetch_input_value("Mutation")
+        crossover = self.fetch_input_value("Crossover")
+        parent_selection = self.fetch_input_value("Parent Selection")
+        survivor_selection = self.fetch_input_value("Survivor Selection")
+
+        if None in [pop_size, generations]:
+            raise ValueError("EAParametersNode values not available!")
+
+        # --- Build EA backend ---
+        from ariel.ec.a004 import BasicEA, EAStep, create_individual, \
+            parent_selection as ps_op, crossover as co_op, mutation as mut_op, \
+            evaluate as eval_op, survivor_selection as ss_op
+
+        population = [create_individual() for _ in range(pop_size)]
+        population = eval_op(population)
+
+        operations = []
+        if parent_selection:
+            operations.append(EAStep("parent_selection", ps_op))
+        if crossover:
+            operations.append(EAStep("crossover", co_op))
+        if mutation:
+            operations.append(EAStep("mutation", mut_op))
+        operations.append(EAStep("evaluation", eval_op))
+        if survivor_selection:
+            operations.append(EAStep("survivor_selection", ss_op))
+
+        ea = BasicEA(population=population, operations=operations, num_of_generations=generations)
+        ea.run()
+
+        best = ea.get_solution("best", only_alive=False)
+        self.set_output_value("EA Result", best)
+        self.result = best
+        return best
+
+
 
 
 app = QApplication(sys.argv)
 dialog = NodeEditorDialog()
-# Register both custom nodes
 dialog.editor.available_nodes = {"Environment" : EnvironmentNode, 
                                  "Task": TaskNode,
                                  "FitnessFunction": FitnessFunctionNode,
@@ -221,127 +285,3 @@ dialog.editor.available_nodes = {"Environment" : EnvironmentNode,
 dialog.editor.output_node = EARun
 if dialog.exec():
     print(dialog.result)
-
-
-#     # Run the PyQt application
-#     app.exec()
-
-#     sys.exit(app.exec_())
-
-
-# ========================
-# Main GUI
-# ========================
-
-# class RobotEvolutionGUI(QMainWindow):
-#     def __init__(self):
-#         super().__init__()
-#         self.setWindowTitle("Robot Evolution System")
-#         self.setGeometry(100, 100, 1000, 700)
-
-#         self.tab_widget = QTabWidget(self)
-#         self.setCentralWidget(self.tab_widget)
-
-#         # Keep your existing selection tab
-#         self.tab_widget.addTab(self.create_selection_tab(), "Selection Algorithms")
-
-#         # Add Node Editor tab
-#         self.tab_widget.addTab(NodeEditor(), "Node Editor (Experimental)")
-
-#     def create_selection_tab(self):
-#         widget = QWidget()
-#         layout = QVBoxLayout()
-#         layout.addWidget(QLabel("Define Parent and Survivor Selection Types"))
-
-#         # Mapping for display names and internal names
-#         self.selection_display_to_internal = {
-#             "Tournament": "tournament",
-#             "Roulette Wheel": "roulette",
-#             "Top-N": "topn"
-#         }
-#         self.selection_internal_to_display = {v: k for k, v in self.selection_display_to_internal.items()}
-
-#         # Parent selection dropdown
-#         self.parent_dropdown = QComboBox()
-#         self.parent_dropdown.addItems(self.selection_internal_to_display.values())
-#         self.parent_dropdown.setToolTip("Click the dropdown to choose the parent selection method to be used by your evolutionary algorithm.")
-#         parent_title = QLabel("Parent Selection: ")
-#         layout.addWidget(parent_title)
-#         layout.addWidget(self.parent_dropdown)
-
-#         # Parent selection parameters
-#         self.parent_params_layout = QVBoxLayout()
-#         layout.addLayout(self.parent_params_layout)
-
-#         # Connect parent dropdown to update function
-#         self.parent_dropdown.currentIndexChanged.connect(
-#             lambda: self.update_selection_params(self.parent_dropdown, self.parent_params_layout)
-#         )
-
-#         # Survivor selection dropdown
-#         self.survivor_dropdown = QComboBox()
-#         self.survivor_dropdown.addItems(self.selection_internal_to_display.values())
-#         self.survivor_dropdown.setToolTip("Click the dropdown to choose the survival selection method to be used by your evolutionary algorithm.")
-#         layout.addWidget(QLabel("Survivor Selection:"))
-#         layout.addWidget(self.survivor_dropdown)
-
-#         # Survivor selection parameters
-#         self.survivor_params_layout = QVBoxLayout()
-#         layout.addLayout(self.survivor_params_layout)
-
-#         # Connect survivor dropdown to update function
-#         self.survivor_dropdown.currentIndexChanged.connect(
-#             lambda: self.update_selection_params(self.survivor_dropdown, self.survivor_params_layout)
-#         )
-
-#         widget.setLayout(layout)
-
-#         # Automatically update parameters for the initial selection
-#         self.update_selection_params(self.parent_dropdown, self.parent_params_layout)
-#         self.update_selection_params(self.survivor_dropdown, self.survivor_params_layout)
-
-#         return widget
-
-#     def update_selection_params(self, item, params_layout):
-#         """Update the parameter input fields based on the selected function."""
-#         if item is None:
-#             return
-
-#         # Clear existing parameter input fields and layouts
-#         while params_layout.count():
-#             layout_item = params_layout.takeAt(0)
-#             if layout_item.widget():
-#                 layout_item.widget().deleteLater()
-#             elif layout_item.layout():
-#                 child_layout = layout_item.layout()
-#                 while child_layout.count():
-#                     child_item = child_layout.takeAt(0)
-#                     if child_item.widget():
-#                         child_item.widget().deleteLater()
-#                 child_layout.deleteLater()
-
-#         # Selection parameters
-#         selection_params = {
-#             "tournament": {"k": 2},
-#             "roulette": {"n": 1},
-#             "topn": {"n": 1}
-#         }
-
-#         # Get the internal name from the display name
-#         selected_function_display = item.currentText()
-#         selected_function = self.selection_display_to_internal.get(selected_function_display, None)
-
-#         if selected_function in selection_params:
-#             for param, value in selection_params[selected_function].items():
-#                 input_layout = QHBoxLayout()
-#                 input_label = QLabel(f"{param}:")
-#                 input_field = QLineEdit(str(value))
-#                 input_layout.addWidget(input_label)
-#                 input_layout.addWidget(input_field)
-#                 params_layout.addLayout(input_layout)
-
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     window = RobotEvolutionGUI()
-#     window.show()
-#     sys.exit(app.exec_())
