@@ -51,18 +51,14 @@ class EARun(Node):
         self.add_value_input("PopSizeOut")
         self.add_value_input("GenerationsOut")
 
-        # Reference the entries for easier access in evaluate
-        self.pop_entry = self.get_entry("PopSizeOut")
-        self.gen_entry = self.get_entry("GenerationsOut")
-
         # Optional: Add an output for the result
-        self.add_label_output("Result")
+        # self.add_label_output("Result")
 
-    def evaluate(self, values=None):
+    def evaluate(self, result):
         """Run the EA using the parameters provided by EAParameters."""
         # Get parameter values from inputs
-        pop_size = values["PopSizeOut"]  # or use values["PopSizeOut"]
-        generations = values["GenerationsOut"]
+        pop_size = result["PopSizeOut"]
+        generations = result["GenerationsOut"]
 
         console.log(f"Running EA with population={pop_size}, generations={generations}")
 
@@ -113,4 +109,4 @@ ea_run_node = EARun()
 dialog.editor.output_node = ea_run_node
 
 if dialog.exec():
-    print("Editor finished. Best individual:",  ea_run_node.evaluate())
+    print("Editor finished. Best individual:",  ea_run_node.evaluate(dialog.result))
