@@ -12,11 +12,3 @@ _task_fitness_function_map_ = {
     "Targeted Locomotion": [distance_to_target_ff],
     "Turning In Place": [turning_in_place_ff],
 }
-
-__all__ = [
-    "xy_displacement_ff",
-    "x_speed_ff",
-    "y_speed_ff",
-    "distance_to_target_ff",
-    "turning_in_place_ff",
-]
