@@ -19,45 +19,79 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+# ENUMS as a base
+
+# Import the backend components
+from ariel.simulation.environments import *
+from ariel.simulation.tasks import *
+from ariel.simulation.controllers import *
+
+
 # ========================
 # Node Editor Components
 # ========================
 from QNodeEditor import Node, NodeEditorDialog
+from QNodeEditor.node import Node
+
+phenotypes = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
 
 
-class AddNode(Node):
-    code = 0  # Unique code for each node type
+class TaskNode(Node):
+    code=1
 
     def create(self):
-        self.title = "Addition"  # Set the node title
+        self.title = "Task"
+        self.add_combo_box_entry("Task", items=["Turning in Place", "Maze Navigation", "Foraging"])
+        self.add_label_output("Selected Task")
 
-        self.add_label_output("Output")  # Add output socket
-        self.add_value_input("Value 1")  # Add input socket for first value
-        self.add_value_input("Value 2")  # Add input socket for second value
+class PopulationSizeNode(Node):
+    code = 200
+
+    def create(self):
+        self.title = "Population Size"
+        self.add_value_input("Size", 10)
+        self.add_label_output("Population Size")
 
     def evaluate(self, values: dict):
-        result = (
-            values["Value 1"] + values["Value 2"]
-        )  # Add 'Value 1' and 'Value 2'
-        self.set_output_value("Output", result)  # Set as value for 'Output'
+        value = self.entries_dict["Size"].get_value()
+        self.set_output_value("Population Size", value)
+        return value
 
-    # class OutNode(Node):
-    #     code = 1  # Unique code for this node
+class GenotypeNode(Node):
+    code = 201
 
     def create(self):
-        self.title = "Output"  # Set the title of the node
-        self.add_label_input("Value")  # Add input value
+        self.title = "Genotype-Node"
+        self.add_combo_box_entry("Genotype", items=["Integers", "Bitstring", "Custom"])
+        self.add_label_output("Selected Genotype")  # unique name
 
-    # if __name__ == "__main__":
-    #     app = QApplication(sys.argv)
+    def evaluate(self, values: dict):
+        value = self.entries_dict["Genotype"].get_value()
+        self.set_output_value("Selected Genotype", value)
+        return value
 
-    dialog = NodeEditorDialog()
-    # Register both custom nodes
-    dialog.editor.available_nodes = {"Addition": AddNode, "Output": OutNode}
-    dialog.editor.output_node = OutNode
-    if dialog.exec():
-        print(dialog.result)
-        sys.exit(app.exec_())
+
+class OutNode(Node):
+    code = 999
+
+    def create(self):
+        self.title = "Output"
+        self.add_label_input("Result")
+
+    def evaluate(self, values: dict):
+        value = self.get_input_value("Result")
+        self.set_output_value("Result", value)
+        self.result = value
+        return value
+
+
+app = QApplication(sys.argv)
+dialog = NodeEditorDialog()
+# Register both custom nodes
+dialog.editor.available_nodes = {"PopulationSize": PopulationSizeNode, "GenotypeNode": GenotypeNode, "Output": OutNode}
+dialog.editor.output_node = OutNode
+if dialog.exec():
+    print(dialog.result)
 
 
 #     # Run the PyQt application
