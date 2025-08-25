@@ -37,38 +37,49 @@ phenotypes = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
 
 
 class TaskNode(Node):
-    code=1
+    code = 1
 
     def create(self):
-        self.title = "Task"
-        self.add_combo_box_entry("Task", items=["Turning in Place", "Maze Navigation", "Foraging"])
+        self.title = "Select Task"
+        # Dropdown menu for tasks
+        self.add_combo_box_entry("Task", items=[
+            "Gate Learning",
+            "Targeted Locomotion",
+            "Turning In Place"
+        ])
+        # Output to connect to FitnessFunctionNode
         self.add_label_output("Selected Task")
 
-class PopulationSizeNode(Node):
-    code = 200
+    def evaluate(self, values: dict):
+        task = self.entries_dict["Task"].get_value()
+        self.set_output_value("Selected Task", task)
+        return task
+    
+class FitnessFunctionNode(Node):
+    code = 301
 
     def create(self):
-        self.title = "Population Size"
-        self.add_value_input("Size", 10)
-        self.add_label_output("Population Size")
+        self.title = "Fitness Function"
+        # Input socket from TaskNode
+        self.add_value_input("Task")
+        # Output socket: the actual function
+        self.add_label_output("Fitness Function")
 
     def evaluate(self, values: dict):
-        value = self.entries_dict["Size"].get_value()
-        self.set_output_value("Population Size", value)
-        return value
+        task = values.get("Task")
+        if task is None:
+            return None
 
-class GenotypeNode(Node):
-    code = 201
+        # Map tasks to fitness functions
+        task_map = {
+            "Gate Learning": [xy_displacement_ff, x_speed_ff, y_speed_ff],
+            "Targeted Locomotion": [distance_to_target_ff],
+            "Turning In Place": [turning_in_place_ff],
+        }
 
-    def create(self):
-        self.title = "Genotype-Node"
-        self.add_combo_box_entry("Genotype", items=["Integers", "Bitstring", "Custom"])
-        self.add_label_output("Selected Genotype")  # unique name
-
-    def evaluate(self, values: dict):
-        value = self.entries_dict["Genotype"].get_value()
-        self.set_output_value("Selected Genotype", value)
-        return value
+        functions = task_map.get(task, [])
+        self.set_output_value("Fitness Function", functions)
+        return functions
 
 
 class OutNode(Node):
@@ -88,7 +99,7 @@ class OutNode(Node):
 app = QApplication(sys.argv)
 dialog = NodeEditorDialog()
 # Register both custom nodes
-dialog.editor.available_nodes = {"PopulationSize": PopulationSizeNode, "GenotypeNode": GenotypeNode, "Output": OutNode}
+dialog.editor.available_nodes = {"Task": TaskNode, "FitnessFunction": FitnessFunctionNode, "Output": OutNode}
 dialog.editor.output_node = OutNode
 if dialog.exec():
     print(dialog.result)
