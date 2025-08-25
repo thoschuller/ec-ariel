@@ -1,4 +1,4 @@
-def distance_to_target(initial_position, target_position):
+def distance_to_target_ff(initial_position, target_position):
     """
     Calculate the Euclidean distance between the current position and the target position.
 
