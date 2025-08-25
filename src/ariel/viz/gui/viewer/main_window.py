@@ -22,10 +22,9 @@ from PyQt5.QtWidgets import (
 # ENUMS as a base
 
 # Import the backend components
-from ariel.simulation.environments import *
-from ariel.simulation.tasks import *
+from ariel.simulation.environments.__init__ import __all__ as envs
+from ariel.simulation.tasks.__init__ import __all__ as ffs, tasks, _task_fitness_function_map_
 from ariel.simulation.controllers import *
-
 
 # ========================
 # Node Editor Components
@@ -33,22 +32,51 @@ from ariel.simulation.controllers import *
 from QNodeEditor import Node, NodeEditorDialog
 from QNodeEditor.node import Node
 
-phenotypes = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+class PhenotypeNode(Node):
+    code = 111
 
+    def create(self):
+        self.title = "Select Phenotype"
+        self.add_combo_box_entry("Phenotype", items=["CPG", "FFNN", "CTRNN"])
+        self.add_label_output("Selected Phenotype")
+
+    def evaluate(self, values: dict):
+        phenotype = self.entries_dict["Phenotype"].get_value()
+        self.set_output_value("Selected Phenotype", phenotype)
+        return phenotype
+
+class GenotypeNode(Node):
+    code = 211
+
+    def create(self):
+        self.title = "Select Genotype"
+        self.add_combo_box_entry("Genotype", items=["Direct", "Compositional Pattern Producing Network (CPPN)"])
+        self.add_label_output("Selected Genotype")
+
+    def evaluate(self, values: dict):
+        genotype = self.entries_dict["Genotype"].get_value()
+        self.set_output_value("Selected Genotype", genotype)
+        return genotype
+
+class EnvironmentNode(Node):
+    code=121
+    def create(self):
+        self.title = "Select Environment"
+        self.add_combo_box_entry("Environment", items=envs)
+        self.add_label_output("Selected Environment")
+
+    def evaluate(self, values: dict):
+        env = self.entries_dict["Environment"].get_value()
+        self.set_output_value("Selected Environment", env)
+        return env
 
 class TaskNode(Node):
-    code = 1
+    code = 122
 
     def create(self):
         self.title = "Select Task"
-        # Dropdown menu for tasks
-        self.add_combo_box_entry("Task", items=[
-            "Gate Learning",
-            "Targeted Locomotion",
-            "Turning In Place"
-        ])
-        # Output to connect to FitnessFunctionNode
-        self.add_label_output("Selected Task")
+        self.add_combo_box_entry("Task", items=tasks)
+        self.add_label_output("Selected Task")  # output socket
 
     def evaluate(self, values: dict):
         task = self.entries_dict["Task"].get_value()
@@ -56,33 +84,113 @@ class TaskNode(Node):
         return task
     
 class FitnessFunctionNode(Node):
-    code = 301
+    code = 221
+
+    task_map = {
+        "Gate Learning": ["xy_displacement_ff", "x_speed_ff", "y_speed_ff"],
+        "Targeted Locomotion": ["distance_to_target_ff"],
+        "Turning In Place": ["turning_in_place_ff"],
+    }
 
     def create(self):
-        self.title = "Fitness Function"
+        self.title = "Select Fitness Function"
         # Input socket from TaskNode
         self.add_value_input("Task")
-        # Output socket: the actual function
-        self.add_label_output("Fitness Function")
+
+        # Dropdown for fitness functions (initially empty)
+        self.add_combo_box_entry("Fitness Function", items=[])  # Default items
+        self.add_label_output("Selected Fitness Function")
 
     def evaluate(self, values: dict):
-        task = values.get("Task")
-        if task is None:
-            return None
+        # This is the **value from the input socket**
+        task_input = values.get("Task")
+        combo = self.entries_dict["Fitness Function"]
 
-        # Map tasks to fitness functions
-        task_map = {
-            "Gate Learning": [xy_displacement_ff, x_speed_ff, y_speed_ff],
-            "Targeted Locomotion": [distance_to_target_ff],
-            "Turning In Place": [turning_in_place_ff],
+        if task_input in self.task_map:
+            # Update dropdown items dynamically
+            combo.clear()
+            combo.addItems(self.task_map[task_input])
+
+        # Get currently selected fitness function
+        selected = combo.get_value()
+        self.set_output_value("Selected Fitness Function", selected)
+        return selected
+
+class MutationNode(Node):
+    code=311
+
+    def create(self):
+        self.title = "Select Mutation"
+        self.add_combo_box_entry("Mutation", items=["Gaussian", "Uniform", "Creep"])
+        self.add_label_output("Selected Mutation")
+    
+    def evaluate(self, values: dict):
+        mutation = self.entries_dict["Mutation"].get_value()
+        self.set_output_value("Selected Mutation", mutation)
+        return mutation
+    
+class CrossoverNode(Node):
+    code=312
+
+    def create(self):
+        self.title = "Select Crossover"
+        self.add_combo_box_entry("Crossover", items=["One-Point", "Two-Point", "Uniform"])
+        self.add_label_output("Selected Crossover")
+    
+    def evaluate(self, values: dict):
+        crossover = self.entries_dict["Crossover"].get_value()
+        self.set_output_value("Selected Crossover", crossover)
+        return crossover
+
+class ParentSelectionNode(Node):
+    code=321
+
+    def create(self):
+        self.title = "Select Parent Selection"
+        self.add_combo_box_entry("Parent Selection", items=["Tournament", "Roulette Wheel", "Top-N"])
+        self.add_label_output("Selected Parent Selection")
+    
+    def evaluate(self, values: dict):
+        parent_selection = self.entries_dict["Parent Selection"].get_value()
+        self.set_output_value("Selected Parent Selection", parent_selection)
+        return parent_selection
+
+class SurvivorSelectionNode(Node):
+    code=322
+
+    def create(self):
+        self.title = "Select Survivor Selection"
+        self.add_combo_box_entry("Survivor Selection", items=["Tournament", "Roulette Wheel", "Top-N"])
+        self.add_label_output("Selected Survivor Selection")
+    
+    def evaluate(self, values: dict):
+        survivor_selection = self.entries_dict["Survivor Selection"].get_value()
+        self.set_output_value("Selected Survivor Selection", survivor_selection)
+        return survivor_selection
+
+class EAParametersNode(Node):
+    code=422
+
+    def create(self):
+        self.title = "EA Parameters"
+        self.add_line_edit_entry("Population Size", "100")
+        self.add_line_edit_entry("Generations", "50")
+        self.add_line_edit_entry("Mutation Rate", "0.01")
+        self.add_line_edit_entry("Crossover Rate", "0.7")
+        self.add_label_output("EA Parameters")
+    
+    def evaluate(self, values: dict):
+        params = {
+            "Population Size": int(self.entries_dict["Population Size"].get_value()),
+            "Generations": int(self.entries_dict["Generations"].get_value()),
+            "Mutation Rate": float(self.entries_dict["Mutation Rate"].get_value()),
+            "Crossover Rate": float(self.entries_dict["Crossover Rate"].get_value()),
         }
+        self.set_output_value("EA Parameters", params)
+        return params
+    
 
-        functions = task_map.get(task, [])
-        self.set_output_value("Fitness Function", functions)
-        return functions
-
-
-class OutNode(Node):
+class EARun(Node):
     code = 999
 
     def create(self):
@@ -99,8 +207,18 @@ class OutNode(Node):
 app = QApplication(sys.argv)
 dialog = NodeEditorDialog()
 # Register both custom nodes
-dialog.editor.available_nodes = {"Task": TaskNode, "FitnessFunction": FitnessFunctionNode, "Output": OutNode}
-dialog.editor.output_node = OutNode
+dialog.editor.available_nodes = {"Environment" : EnvironmentNode, 
+                                 "Task": TaskNode,
+                                 "FitnessFunction": FitnessFunctionNode,
+                                 "Phenotype": PhenotypeNode,
+                                 "Genotype": GenotypeNode,
+                                 "Mutation": MutationNode,
+                                 "Crossover": CrossoverNode,
+                                 "ParentSelection": ParentSelectionNode,
+                                 "SurvivorSelection": SurvivorSelectionNode,
+                                 "EA_Parameters": EAParametersNode,
+                                 "EA_run": EARun}
+dialog.editor.output_node = EARun
 if dialog.exec():
     print(dialog.result)
 
