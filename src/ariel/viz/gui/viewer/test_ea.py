@@ -9,27 +9,6 @@ from rich.console import Console
 
 console = Console()
 
-
-# ----------------------------
-# EA Parameters Node
-# ----------------------------
-# class EAParameters(Node):
-#     code = 0
-
-#     def create(self):
-#         self.title = 'Evolutionary Algorithm Parameters'
-
-#         self.add_value_output('Population Size')
-#         self.add_value_output('Generations')
-
-#     def evaluate(self, values):
-#         pop_size = values['Population Size']
-#         generations = values['Generations']
-
-#         self.set_output_value('Population Size', pop_size)
-#         self.set_output_value('Generations', generations)
-
-
 # ----------------------------
 # EA Parameters Node
 # ----------------------------
@@ -82,8 +61,8 @@ class EARun(Node):
     def evaluate(self, values=None):
         """Run the EA using the parameters provided by EAParameters."""
         # Get parameter values from inputs
-        pop_size = self.pop_entry.calculate_value()  # or use values["PopSizeOut"]
-        generations = self.gen_entry.calculate_value()
+        pop_size = values["PopSizeOut"]  # or use values["PopSizeOut"]
+        generations = values["GenerationsOut"]
 
         console.log(f"Running EA with population={pop_size}, generations={generations}")
 
