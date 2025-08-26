@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWidgets import QPushButton, QGraphicsProxyWidget
 from PyQt5.QtWidgets import QLineEdit, QComboBox
 from QNodeEditor.node import Node
+from QNodeEditor import Node, NodeEditorDialog
 
 # ENUMS as a base
 
@@ -32,15 +33,14 @@ from ariel.simulation.controllers import *
 # ========================
 # Node Editor Components
 # ========================
-from QNodeEditor import Node, NodeEditorDialog
-from QNodeEditor.node import Node
 
+# The extractor used is what should be specificied in this case I guess
 class PhenotypeNode(Node):
     code = 111
 
     def create(self):
         self.title = "Select Phenotype"
-        self.add_combo_box_entry("Phenotype", items=["CPG", "FFNN", "CTRNN"])
+        self.add_combo_box_entry("Phenotype", items=["RoboGen-robot", "Integer-Solution"])
         self.add_label_output("Selected Phenotype")
 
     def evaluate(self, values: dict):
@@ -53,7 +53,7 @@ class GenotypeNode(Node):
 
     def create(self):
         self.title = "Select Genotype"
-        self.add_combo_box_entry("Genotype", items=["Integer", "Compositional Pattern Producing Network (CPPN)"])
+        self.add_combo_box_entry("Genotype", items=["HighProbEncoding", "IntegerEncoding"])
         self.add_label_output("Selected Genotype")
 
     def evaluate(self, values: dict):
@@ -84,16 +84,14 @@ class TaskNode(Node):
     def evaluate(self, values: dict):
         task = self.entries_dict["Task"].get_value()
         self.set_output_value("Selected Task", task)
+        # print(f"TaskNode selected task: {task}")
         return task
     
 class FitnessFunctionNode(Node):
     code = 221
 
-    task_map = {
-        "Gate Learning": ["xy_displacement_ff", "x_speed_ff", "y_speed_ff"],
-        "Targeted Locomotion": ["distance_to_target_ff"],
-        "Turning In Place": ["turning_in_place_ff"],
-    }
+
+    task_map = _task_fitness_function_map_ # imported above from the actual file
 
     def create(self):
         self.title = "Select Fitness Function"
@@ -185,16 +183,12 @@ class EAParametersNode(Node):
         self.add_value_output("Population Size")
         self.add_value_output("Generations")
 
-        # # Add line edit entries to actually set them
-        self.add_value_entry("Population Size", "100")
-        self.add_value_entry("Generations", "50")
-
         self.entries_dict = {entry.name: entry for entry in self.entries}
 
     def evaluate(self, values: dict):
         # Fetch values from line edits
-        pop_size = int(self.entries_dict["Population Size"].get_value())
-        generations = int(self.entries_dict["Generations"].get_value())
+        pop_size = self.entries_dict["Population Size"].get_value()
+        generations = self.entries_dict["Generations"].get_value()
 
         # Store outputs for input nodes to fetch
         self.set_output_value("Population Size", pop_size)
