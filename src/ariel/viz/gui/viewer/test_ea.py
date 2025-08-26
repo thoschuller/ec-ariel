@@ -1,4 +1,7 @@
 # --------------------------------------------------------------------
+# from ariel.viz.analysis.parse_db import get_fitness_over_generations
+# from results_viewer import EmbeddedPlotWidget
+
 from QNodeEditor import Node
 from PyQt5.QtWidgets import QApplication, QPushButton, QGraphicsProxyWidget
 from QNodeEditor import NodeEditorDialog
@@ -26,7 +29,7 @@ class EAParameters(Node):
         self.add_label_output("PopSizeOut")
         self.add_label_output("GenerationsOut")
 
-    def evaluate(self, values):
+    def evaluate(self, values: dict):
         pop_size = values["Population Size"]
         generations = values["Generations"]
 
@@ -52,13 +55,14 @@ class EARun(Node):
         self.add_value_input("GenerationsOut")
 
         # Optional: Add an output for the result
-        # self.add_label_output("Result")
+        self.add_label_output("Result")
 
-    def evaluate(self, result):
+    def evaluate(self, values: dict):
+
         """Run the EA using the parameters provided by EAParameters."""
         # Get parameter values from inputs
-        pop_size = result["PopSizeOut"]
-        generations = result["GenerationsOut"]
+        pop_size = values["PopSizeOut"]
+        generations = values["GenerationsOut"]
 
         console.log(f"Running EA with population={pop_size}, generations={generations}")
 
