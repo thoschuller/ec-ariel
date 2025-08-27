@@ -1,7 +1,6 @@
 <!-- TODO:
 Complete EC module section
-Fix image not working 
-Hyperlink to gui in starting guide
+update the GUI image
 Running experiments with GUI
 -->
 # Evolutionary Computing Course Documentation
@@ -38,10 +37,6 @@ or create it with the IDE you are using. For example, in VS Code just press `ctr
 It should look something like this: 
 
 ![image](../resources/example_image.png)
-<!-- <p align="center">
-  <img src="../resources/example_image.png" width="1000">
-</p> -->
-
 
 ## Basic ARIEL Functions
 In this section we will present some of the basic functionalities of ARIEL.
@@ -95,8 +90,8 @@ def main() -> None:
 ```
 
 ### Run Experiments Using the GUI
-For a more detailed explanation on how the GUI works and how to use it check out the {doc}`GUI`
+For a more detailed explanation on how the GUI works and how to use it check out the {doc}`GUI`.
 
-INSERT SCREENSHOT OF GUI
+The way the GUI works is in the form of a "Node Editor". This allows you to highly customise your experiments without needing ot write code. As you can see in the example (although simplified), you can create nodes with your parameters (population size, generations etc) and evolutionary operators (crossover, mutation etc) and link them to create the complete evolutionary process.
 
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA WHAT IS A GUI!!!!!
+![GUI](../resources/GUI.png)

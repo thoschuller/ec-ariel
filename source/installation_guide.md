@@ -34,7 +34,7 @@
 
 ## Installation with Docker
 
-### I am not very profecient with docker. So double check!!!!
+### I am not very proficient with docker. So double check!!!!
 1. Build the Docker image:
 
     ```bash
@@ -50,7 +50,9 @@
 3. Edit docker container:
 
 ![image1](../resources/docker_img_1.jpeg)
+
 ![image2](../resources/docker_img_2.jpeg)
+
 ![image3](../resources/docker_img_2.jpeg)
 
 

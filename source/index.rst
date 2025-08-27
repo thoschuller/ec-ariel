@@ -31,7 +31,7 @@ Features
 
 Get started below, or explore the full documentation for more details.
 
-Installation Inforamtion
+Installation Information
 ------------
 See the :ref:`installation guide` for details.
 
