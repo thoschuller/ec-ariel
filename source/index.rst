@@ -8,7 +8,7 @@
 
 Ariel documentation
 ===================
-.. figure:: ../resources/ariel_header.svg
+.. figure:: ../resources/ariel_header_rounded.png
    :alt: Ariel Logo
    :align: center
 
