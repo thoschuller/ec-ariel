@@ -351,6 +351,7 @@ libfreetype
 libgl
 libmamba
 libncurses
+libosmesa
 libpango
 libreadline
 libsm
@@ -432,6 +433,7 @@ multigraph
 mut
 mycanvas
 mypy
+Mypy
 mypyc
 Mypyc
 MYPYC

@@ -164,6 +164,8 @@ sudo nala install --update \
     libxshmfence-dev \
     openssh-client \
     x11-apps \
+    libgl1-mesa-dev \
+    libosmesa6-dev \
     -y
 
 # Clean up the package cache
