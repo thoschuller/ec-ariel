@@ -33,6 +33,6 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'furo'
-html_logo = "../resources/ariel_logo_rounded.png"
-html_favicon = "../resources/ariel_logo_rounded.png"
+html_logo = "../resources/ariel_logo_round.png"
+html_favicon = "../resources/ariel_logo_round.png"
 html_static_path = ['_static']
