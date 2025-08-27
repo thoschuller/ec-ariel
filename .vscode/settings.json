@@ -1,15 +1,26 @@
 {
+    "cSpell.customDictionaries": {
+        "custom": true,
+        "internal-terms": false,
+        "project-words": {
+            "addWords": true,
+            "description": "Words used in this project",
+            "name": "project-words",
+            "path": "${workspaceRoot}/.vscode/project-words.txt"
+        }
+    },
     "peacock.color": "#ef6881",
     "workbench.colorCustomizations": {
-        "editorGroup.border": "#f496a7",
-        "panel.border": "#f496a7",
-        "sash.hoverBorder": "#f496a7",
-        "sideBar.border": "#f496a7",
-        "statusBar.background": "#ef6881",
-        "statusBar.foreground": "#15202b",
-        "statusBarItem.hoverBackground": "#ea3a5b",
-        "statusBarItem.remoteBackground": "#ef6881",
-        "statusBarItem.remoteForeground": "#15202b",
-        "tab.activeBorder": "#f496a7"
-    }
+        "editorGroup.border": "#6f9aa9",
+        "panel.border": "#6f9aa9",
+        "sash.hoverBorder": "#6f9aa9",
+        "sideBar.border": "#6f9aa9",
+        "statusBar.background": "#56808f",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#6f9aa9",
+        "statusBarItem.remoteBackground": "#56808f",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "tab.activeBorder": "#6f9aa9"
+    },
+    "peacock.remoteColor": "#56808f"
 }
