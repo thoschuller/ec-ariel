@@ -4,17 +4,29 @@ version = "0.0.0"
 description = "Ariel"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "GPL-3.0"}
-authors = [
-  {name = "jmdm", email = "jmdm.880@gmail.com"},
-]
-classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
-]
+license = { text = "GPL-3.0" }
+authors = [{ name = "jmdm", email = "jmdm.880@gmail.com" }]
+classifiers = ["Development Status :: 2 - Pre-Alpha"]
 
 dependencies = [
-"click >=8.0.1",
-"nox",
+  "click>=8.0.1",
+  "cmaes>=0.12.0",
+  "matplotlib>=3.9.4",
+  "mujoco>=3.3.5",
+  "networkx>=3.2.1",
+  "nevergrad>=1.0.12",
+  "nicegui>=2.23.3",
+  "noise>=1.2.2",
+  "nox",
+  "numpy>=2.0.2",
+  "numpy-quaternion>=2023.0.3",
+  "opencv-python>=4.11.0.86",
+  "pillow>=11.3.0",
+  "pydantic>=2.11.7",
+  "pydantic-settings>=2.10.1",
+  "rich>=14.1.0",
+  "sqlalchemy>=2.0.43",
+  "sqlmodel>=0.0.24",
 ]
 
 
@@ -32,10 +44,7 @@ dev = [
   "pytest >=6.2.5",
   "pygments >=2.10.0",
 ]
-lint = [
-  "ruff >=0.5.5",
-  "pydoclint >=0.5.0",
-]
+lint = ["ruff >=0.5.5", "pydoclint >=0.5.0"]
 docs = [
   "furo >=2021.11.12",
   "myst-parser == 3.0.1",
@@ -43,15 +52,9 @@ docs = [
   "sphinx-autobuild >=2021.3.14",
   "sphinx-click >=3.0.2",
 ]
-mypy = [
-  "mypy >=0.930"
-]
-typeguard = [
-  "typeguard >=2.13.3"
-]
-xdoctest = [
-  "xdoctest[colors] >=0.15.10"
-]
+mypy = ["mypy >=0.930"]
+typeguard = ["typeguard >=2.13.3"]
+xdoctest = ["xdoctest[colors] >=0.15.10"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -66,10 +69,7 @@ ariel = "ariel.__main__:cli"
 # When using mypyc, you must list all dependencies used by the compiled
 # modules here. Otherwise, mypyc will not be able to see the types of the
 # dependencies, and the compilation will fail.
-requires = [
-    "setuptools>=61.0",
-    "mypy>=1.0",
-]
+requires = ["setuptools>=61.0", "mypy>=1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.coverage.paths]
@@ -83,10 +83,7 @@ source = ["ariel", "tests"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 100
-exclude_lines = [
-  "pragma: no cover",
-  "if TYPE_CHECKING:",
-]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
 
 [tool.mypy]
 strict = true
@@ -100,22 +97,22 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-  "B",    # flake8-bugbear
-  "C90",  # mccabe
-  "D",    # pydocstyle
-  "E",    # pycodestyle
-  "F",    # pyflakes
-  "I",    # isort
-  "N",    # pep8-naming
-  "RUF",  # Ruff-specific rules
-  "S",    # flake8-bandit
-  "UP",   # pyupgrade
-  "W",    # pycodestyle
+  "B",   # flake8-bugbear
+  "C90", # mccabe
+  "D",   # pydocstyle
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # isort
+  "N",   # pep8-naming
+  "RUF", # Ruff-specific rules
+  "S",   # flake8-bandit
+  "UP",  # pyupgrade
+  "W",   # pycodestyle
 ]
 ignore = [
   "COM812",
   "COM819",
-  "D107",  # undocumented-public-init conflicts with DOC301
+  "D107",   # undocumented-public-init conflicts with DOC301
   "D206",
   "D300",
   "E111",

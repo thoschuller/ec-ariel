@@ -24,6 +24,7 @@ ASTRK
 astropy
 asyncio
 aurelia
+autobuild
 AUTOCONNECT
 autolimits
 autoref
@@ -82,7 +83,9 @@ chapterpage
 charliermarsh
 charx
 charxstring
+cibuildwheel
 Cieslewski
+cjolowicz
 classmethod
 classnamecolor
 cleandoc
@@ -104,6 +107,7 @@ colspec
 commentcolor
 commentstyle
 condabin
+conftest
 confusables
 constr
 CONTACTFORCE
@@ -224,6 +228,7 @@ funcnamecolor
 funcs
 functools
 FURB
+furo
 fzf
 FZF
 gainprm
@@ -262,6 +267,7 @@ hopfs
 hpd
 HPD
 htmlcov
+hypermodern
 hyperparameters
 hyperref
 ICN
@@ -426,6 +432,9 @@ multigraph
 mut
 mycanvas
 mypy
+mypyc
+Mypyc
+MYPYC
 myst
 nala
 Nala
@@ -458,6 +467,7 @@ normalvariate
 nosetests
 notsotiny
 nox
+noxfile
 npt
 NPY
 nrows
@@ -498,6 +508,7 @@ PGH
 PIL
 pipenv
 Pipfile
+pipreqs
 pla
 PLR
 plt
@@ -523,11 +534,13 @@ pycache
 pycallgraph
 pycodestyle
 pydantic
+pydoclint
 pydocstyle
 pyenv
 Pyflakes
 pyflow
 pyglet
+pyglm
 pygmentize
 pygments
 pygrep
@@ -689,6 +702,7 @@ TRN
 trntype
 truecolor
 tryceratops
+typeguard
 typeshed
 Tyrrell
 underfull
@@ -720,6 +734,7 @@ wxyz
 xbm
 xcb
 xcolor
+xdoctest
 xindy
 xlabel
 xmat

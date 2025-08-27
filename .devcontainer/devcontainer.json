@@ -26,7 +26,8 @@
 				"usernamehw.errorlens",
 				"tamasfe.even-better-toml",
 				"ms-python.isort",
-				"yzhang.markdown-all-in-one"
+				"yzhang.markdown-all-in-one",
+				"qwtel.sqlite-viewer"
 			]
 		}
 	},

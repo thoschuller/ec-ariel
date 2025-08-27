@@ -1,5 +1,6 @@
 {
     "recommendations": [
-        "johnpapa.vscode-peacock"
+        "johnpapa.vscode-peacock",
+        "qwtel.sqlite-viewer"
     ]
 }

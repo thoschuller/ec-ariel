@@ -22,6 +22,44 @@ or by adding the following to your `settings.json`:
 "dev.containers.dockerPath": "podman",
 ```
 
+## Running the code
+
+* In general you can run the currently open python script via the command palette (`cmd+shift+p`): 
+  * `Tasks: Run Task` -> `Run script: uv run {$file}`
+
+### Run GUI: 
+
+* via terminal
+
+```bash
+uv run src/ariel/gui_code/litegraph/main.py
+```
+
+### Run EA Example
+
+```bash
+uv run src/ariel/ec/a004.py
+```
+
+### Run MuJoCo Example(s)a
+
+Any from the `examples/` folder
+
+For example (pun intended):
+
+```bash
+uv run examples/_hi_prob_dec.py
+```
+
+## Neat commands!
+
+### Grab `requirements.tex` automatically
+```bash
+uv add tool pipreqs
+pipreqs path/to/parse --mode no-pin --force
+uv add -r requirements.txt
+```
+
 
 <!-- # Ariel
 

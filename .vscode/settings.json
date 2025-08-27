@@ -22,5 +22,6 @@
         "statusBarItem.remoteForeground": "#e7e7e7",
         "tab.activeBorder": "#6f9aa9"
     },
-    "peacock.remoteColor": "#56808f"
+    "peacock.remoteColor": "#56808f",
+    "python-envs.pythonProjects": []
 }
