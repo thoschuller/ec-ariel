@@ -31,9 +31,9 @@ Features
 
 Get started below, or explore the full documentation for more details.
 
-Installation
+Installation Inforamtion
 ------------
-See the :ref:`installation` guide for details.
+See the :ref:`installation guide` for details.
 
 
 License

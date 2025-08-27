@@ -1,7 +1,6 @@
 <!-- TODO:
 1. check docker section
 2. add images to docker section -->
-(installation)=
 # Installation guide
 
 ## Prerequisites
