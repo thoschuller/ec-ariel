@@ -32,7 +32,7 @@
     pip install ariel
     ```
 
-## Installation with Docker
+<!-- ## Installation with Docker
 
 ### I am not very proficient with docker. So double check!!!!
 1. Build the Docker image:
@@ -53,13 +53,12 @@
 
 ![image2](../resources/docker_img_2.jpeg)
 
-![image3](../resources/docker_img_2.jpeg)
+![image3](../resources/docker_img_2.jpeg) -->
 
 
 ## Verifying Installation
 
 - For uv/pip: Run the application as described in the project README.
-- For Docker: Access the platform at `http://localhost:8000`.
 
 ## Troubleshooting
 

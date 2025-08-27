@@ -287,34 +287,33 @@
 </div>
 </li>
 </ol>
-</section>
-<section id="installation-with-docker">
-<h2>Installation with Docker<a class="headerlink" href="#installation-with-docker" title="Link to this heading">¶</a></h2>
-<section id="i-am-not-very-proficient-with-docker-so-double-check">
-<h3>I am not very proficient with docker. So double check!!!!<a class="headerlink" href="#i-am-not-very-proficient-with-docker-so-double-check" title="Link to this heading">¶</a></h3>
-<ol class="arabic">
-<li><p>Build the Docker image:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ariel<span class="w"> </span>.
-</pre></div>
-</div>
-</li>
-<li><p>Run the Docker container:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>-p<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span>ariel
-</pre></div>
-</div>
-</li>
-<li><p>Edit docker container:</p></li>
-</ol>
-<p><img alt="image1" src="_images/docker_img_1.jpeg" /></p>
-<p><img alt="image2" src="_images/docker_img_2.jpeg" /></p>
-<p><img alt="image3" src="_images/docker_img_2.jpeg" /></p>
-</section>
+<!-- ## Installation with Docker
+
+### I am not very proficient with docker. So double check!!!!
+1. Build the Docker image:
+
+    ```bash
+    docker build -t ariel .
+    ```
+
+2. Run the Docker container:
+
+    ```bash
+    docker run -d -p 8000:8000 ariel
+    ```
+
+3. Edit docker container:
+
+![image1](../resources/docker_img_1.jpeg)
+
+![image2](../resources/docker_img_2.jpeg)
+
+![image3](../resources/docker_img_2.jpeg) -->
 </section>
 <section id="verifying-installation">
 <h2>Verifying Installation<a class="headerlink" href="#verifying-installation" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>For uv/pip: Run the application as described in the project README.</p></li>
-<li><p>For Docker: Access the platform at <code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code>.</p></li>
 </ul>
 </section>
 <section id="troubleshooting">
@@ -386,10 +385,6 @@
 <li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li><a class="reference internal" href="#installation-with-uv">Installation with uv</a></li>
 <li><a class="reference internal" href="#installation-with-pip">Installation with pip</a></li>
-<li><a class="reference internal" href="#installation-with-docker">Installation with Docker</a><ul>
-<li><a class="reference internal" href="#i-am-not-very-proficient-with-docker-so-double-check">I am not very proficient with docker. So double check!!!!</a></li>
-</ul>
-</li>
 <li><a class="reference internal" href="#verifying-installation">Verifying Installation</a></li>
 <li><a class="reference internal" href="#troubleshooting">Troubleshooting</a></li>
 </ul>

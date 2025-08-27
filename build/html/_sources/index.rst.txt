@@ -35,11 +35,6 @@ Installation Information
 ------------
 See the :ref:`installation guide` for details.
 
-
-License
--------
-Copyright (c) 2025, Ariel. All rights reserved.
-
 .. toctree::
    :maxdepth: 3
    :caption: Contents:
@@ -50,3 +45,6 @@ Copyright (c) 2025, Ariel. All rights reserved.
    extra_info.md
    GUI.md
    
+License
+-------
+Copyright (c) 2025, Ariel. All rights reserved.

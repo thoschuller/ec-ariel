@@ -89,6 +89,7 @@ def main() -> None:
     single_frame_renderer(model, data, steps=10_000)
 ```
 
+## Currently work in progress and thus not usable.
 ### Run Experiments Using the GUI
 For a more detailed explanation on how the GUI works and how to use it check out the {doc}`GUI`.
 

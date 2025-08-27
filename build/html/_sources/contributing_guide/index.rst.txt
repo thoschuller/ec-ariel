@@ -9,7 +9,7 @@ If you added something to Ariel that you would like to share with other people, 
 The first time you make a contribution to a Ariel package your PR should add your name to the ``authors`` list in that package's ``pyproject.toml``.
 **Only open PRs on the** ``development`` **-branch!** And make sure that only your commits are present, otherwise do a rebase.
 
-Note that a general heuristic is, if your addition adds a dependency of another revolve package to the existing dependencies, you might not want to structure it that way.
+Note that a general heuristic is, if your addition adds a dependency of another ARIEL package to the existing dependencies, you might not want to structure it that way.
 For a guideline what can depend on what, look at the package diagram on the main page.
 
 **Important Information before merging your PRs:**
@@ -33,32 +33,7 @@ You cannot directly run the CI configuration locally, but scripts are available 
 ----------
 Code tools
 ----------
-Ariel code quality is checked by a variety of tools. See the ``codetools`` directory.
-The CI runs these tools automatically.
-A shorthand for running the tools and applying as many automatic fixes as possible is ``./codetools/fix_all.sh``.
-Not all problems can be fixed automatically, but the errors should be self explanatory.
-Make sure to regularly run the tools during development (at least mypy), as they can help you detect many mistakes early.
-
-.. list-table:: Ariel code tools
-   :widths: 1 4
-   :header-rows: 1
-
-   * - Tool
-     - Description
-   * - Black
-     - Python code formatting.
-   * - Darglint
-     - Check if python docstrings match what they are documenting.
-   * - Isort
-     - Sorts python imports.
-   * - Mypy
-     - Static type checker for Python.
-   * - Pydocstyle
-     - Makes docstrings conform to a single style. Mostly used to check for missing docstrings.
-   * - Pyflakes
-     - Finds simple errors in Python code. Mostly used to check for unused imports.
-   * - Sort-all
-     - Sorts the ``__all__`` in ``__init__.py`` files.
+WORK IN PROGRESS
 
 -------------
 Documentation
