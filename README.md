@@ -1,5 +1,30 @@
 # Ariel
 
+## Requirements
+
+* [podman](https://podman.io/)
+* [vscode](https://code.visualstudio.com/)
+  * [containers ext](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+  * [containers tut](https://code.visualstudio.com/docs/devcontainers/tutorial)
+
+## IMPORTANT!!
+
+Change the default configuration of vscode dev containers to accept podman!
+
+Either by the settings gui:
+
+![vscode-podman-settings](./docs/resources/vscode-podman-settings.png)
+
+or by adding the following to your `settings.json`:
+
+```
+"dev.containers.dockerComposePath": "podman-compose",
+"dev.containers.dockerPath": "podman",
+```
+
+
+<!-- # Ariel
+
 [![PyPI](https://img.shields.io/pypi/v/ariel.svg)][pypi status]
 [![Status](https://img.shields.io/pypi/status/ariel.svg)][pypi status]
 [![Python Version](https://img.shields.io/pypi/pyversions/ariel)][pypi status]
@@ -97,4 +122,4 @@ This project was generated from [@cjolowicz]'s [uv hypermodern python cookiecutt
 
 [license]: https://github.com/Jacopo-DM/ariel/blob/main/LICENSE
 [contributor guide]: https://github.com/Jacopo-DM/ariel/blob/main/CONTRIBUTING.md
-[command-line reference]: https://ariel.readthedocs.io/en/latest/usage.html
+[command-line reference]: https://ariel.readthedocs.io/en/latest/usage.html -->
