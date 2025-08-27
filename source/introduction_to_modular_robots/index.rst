@@ -9,8 +9,8 @@ This introduction applies to V2 robots. V1 robots are only used internally in CI
 
 Modular robots are robots built from a set of modules and sensors.
 A central brain controls the robot, which can read the sensors.
-The modular robots system in Revolve2 is based on the RoboGen system (*RoboGen: Robot Generation through Artificial Evolution, ser. Artificial Life Conference Proceedings, vol. ALIFE 14: The Fourteenth International Conference on the Synthesis and Simulation of Living Systems, 07 2014*).
-It is possible to adjust Revolve2 to include modules and sensors not readily available in the standard set.
+The modular robots system in ARIEL is based on the RoboGen system (*RoboGen: Robot Generation through Artificial Evolution, ser. Artificial Life Conference Proceedings, vol. ALIFE 14: The Fourteenth International Conference on the Synthesis and Simulation of Living Systems, 07 2014*).
+It is possible to adjust ARIEL to include modules and sensors not readily available in the standard set.
 
 -------
 Modules
