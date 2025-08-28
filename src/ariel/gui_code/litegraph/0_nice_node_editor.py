@@ -74,11 +74,7 @@ LiteGraph.wrapFunctionAsNode("ec/sum", sum, ["Number", "Number"], "Number")
 def page() -> None:
     ui.add_head_html(head_html)
 
-    with (
-        ui.card()
-        .classes("fixed_center")
-        .style("style='width:100%; height:100%'")
-    ):
+    with ui.card().classes("fixed_center").style("style='width:100%; height:100%'"):
         ui.html(canvas)
         ui.run_javascript(register_new_nodes)
         ui.run_javascript(html_code)

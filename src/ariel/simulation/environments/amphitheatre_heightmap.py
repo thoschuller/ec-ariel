@@ -80,9 +80,7 @@ class AmphitheatreTerrainWorld:
             freq = 4.0
             noise = np.fromfunction(
                 np.vectorize(
-                    lambda j, i: pnoise2(
-                        i / res * freq, j / res * freq, octaves=3
-                    )
+                    lambda j, i: pnoise2(i / res * freq, j / res * freq, octaves=3)
                 ),
                 (res, res),
                 dtype=float,

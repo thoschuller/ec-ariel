@@ -100,16 +100,18 @@ class HopfCPG:
             # Coupling terms from neighboring oscillators
             for j in conn:
                 # Rotation matrix for phase difference
-                rot_matrix = np.array([
+                rot_matrix = np.array(
                     [
-                        np.cos(self.phase_diff[i, j]),
-                        -np.sin(self.phase_diff[i, j]),
-                    ],
-                    [
-                        np.sin(self.phase_diff[i, j]),
-                        np.cos(self.phase_diff[i, j]),
-                    ],
-                ])
+                        [
+                            np.cos(self.phase_diff[i, j]),
+                            -np.sin(self.phase_diff[i, j]),
+                        ],
+                        [
+                            np.sin(self.phase_diff[i, j]),
+                            np.cos(self.phase_diff[i, j]),
+                        ],
+                    ]
+                )
 
                 # Apply coupling
                 coupled = self.h * rot_matrix @ np.array([self.x[j], self.y[j]])

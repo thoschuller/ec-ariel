@@ -36,9 +36,7 @@ class AddNode(Node):
         self.add_value_input("Value 2")  # Add input socket for second value
 
     def evaluate(self, values: dict):
-        result = (
-            values["Value 1"] + values["Value 2"]
-        )  # Add 'Value 1' and 'Value 2'
+        result = values["Value 1"] + values["Value 2"]  # Add 'Value 1' and 'Value 2'
         self.set_output_value("Output", result)  # Set as value for 'Output'
 
     # class OutNode(Node):

@@ -40,7 +40,3 @@ def y_speed(xy1, xy2, dt) -> float:
     float: The speed in the y direction.
     """
     return abs(xy2[1] - xy1[1]) / dt if dt > 0 else 0.0
-
-
-
-

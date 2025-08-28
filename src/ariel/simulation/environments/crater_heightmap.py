@@ -69,9 +69,7 @@ class CraterTerrainWorld:
             freq = 6  # adjust to control bump frequency
             noise = np.fromfunction(
                 np.vectorize(
-                    lambda j, i: pnoise2(
-                        i / res * freq, j / res * freq, octaves=3
-                    )
+                    lambda j, i: pnoise2(i / res * freq, j / res * freq, octaves=3)
                 ),
                 (res, res),
                 dtype=float,

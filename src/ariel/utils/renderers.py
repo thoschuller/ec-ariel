@@ -108,9 +108,7 @@ def video_renderer(
 
     # Calculate steps per frame to avoid single iterations (see 'Notes'.)
     options = mujoco.MjOption()
-    steps_per_frame = duration / (
-        options.timestep * duration * video_recorder.fps
-    )
+    steps_per_frame = duration / (options.timestep * duration * video_recorder.fps)
 
     # Call rendering engine
     with mujoco.Renderer(

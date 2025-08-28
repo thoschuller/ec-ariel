@@ -2,10 +2,15 @@
 
 ## Requirements
 
-* [podman](https://podman.io/)
 * [vscode](https://code.visualstudio.com/)
   * [containers ext](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-  * [containers tut](https://code.visualstudio.com/docs/devcontainers/tutorial)
+  * [container tools ext](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-containers)
+
+* Container manager:
+  * [podman desktop](https://podman.io/)
+  * [docker desktop](https://www.docker.com/products/docker-desktop/)
+  
+* [vscode containers tut](https://code.visualstudio.com/docs/devcontainers/tutorial)
 
 ## IMPORTANT!!
 
@@ -15,12 +20,6 @@ Either by the settings gui:
 
 ![vscode-podman-settings](./docs/resources/vscode-podman-settings.png)
 
-or by adding the following to your `settings.json`:
-
-```
-"dev.containers.dockerComposePath": "podman-compose",
-"dev.containers.dockerPath": "podman",
-```
 
 ## Running the code
 
@@ -157,7 +156,8 @@ This project was generated from [@cjolowicz]'s [uv hypermodern python cookiecutt
 [pip]: https://pip.pypa.io/
 
 <!-- github-only -->
-
+<!-- 
 [license]: https://github.com/Jacopo-DM/ariel/blob/main/LICENSE
 [contributor guide]: https://github.com/Jacopo-DM/ariel/blob/main/CONTRIBUTING.md
-[command-line reference]: https://ariel.readthedocs.io/en/latest/usage.html -->
+[command-line reference]: https://ariel.readthedocs.io/en/latest/usage.html -
+->

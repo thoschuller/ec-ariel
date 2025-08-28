@@ -113,12 +113,8 @@ class BasicEA(AbstractEA):
         )
         self.is_maximisation = is_maximisation or config.is_maximisation
         self.console = Console(quiet=quiet or config.quiet)
-        self.current_generation = (
-            first_generation_id or config.first_generation_id
-        )
-        self.num_of_generations = (
-            num_of_generations or config.num_of_generations
-        )
+        self.current_generation = first_generation_id or config.first_generation_id
+        self.num_of_generations = num_of_generations or config.num_of_generations
 
         # Initialisation
         self.init_database()

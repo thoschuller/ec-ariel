@@ -13,13 +13,11 @@ from baklava import Editor
 @ui.page("/")
 def page() -> None:
     ui.add_head_html(head_html)
-    editor = Editor('State', on_change=lambda e: ui.notify(f'The value changed to {e.args}.'))
+    editor = Editor(
+        "State", on_change=lambda e: ui.notify(f"The value changed to {e.args}.")
+    )
 
-    with (
-        ui.card()
-        .classes("fixed_center")
-        .style("style='width:100%; height:100%'")
-    ):
+    with ui.card().classes("fixed_center").style("style='width:100%; height:100%'"):
         ui.html(canvas)
 
 

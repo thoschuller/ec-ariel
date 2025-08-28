@@ -9,5 +9,7 @@ def distance_to_target(initial_position, target_position):
     Returns:
         float: The distance between the two positions.
     """
-    return ((initial_position[0] - target_position[0]) ** 2 + 
-            (initial_position[1] - target_position[1]) ** 2) ** 0.5
+    return (
+        (initial_position[0] - target_position[0]) ** 2
+        + (initial_position[1] - target_position[1]) ** 2
+    ) ** 0.5

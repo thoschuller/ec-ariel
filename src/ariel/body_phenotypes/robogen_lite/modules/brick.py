@@ -67,11 +67,13 @@ class BrickModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles([
-                            np.deg2rad(0),
-                            np.deg2rad(180),
-                            np.deg2rad(180),
-                        ]),
+                        qnp.from_euler_angles(
+                            [
+                                np.deg2rad(0),
+                                np.deg2rad(180),
+                                np.deg2rad(180),
+                            ]
+                        ),
                     ),
                     shift=shift,
                 ),
@@ -84,11 +86,13 @@ class BrickModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles([
-                            np.deg2rad(90),
-                            -np.deg2rad(90),
-                            -np.deg2rad(90),
-                        ]),
+                        qnp.from_euler_angles(
+                            [
+                                np.deg2rad(90),
+                                -np.deg2rad(90),
+                                -np.deg2rad(90),
+                            ]
+                        ),
                     ),
                     shift=shift,
                 ),
@@ -101,11 +105,13 @@ class BrickModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles([
-                            np.deg2rad(90),
-                            np.deg2rad(90),
-                            -np.deg2rad(90),
-                        ]),
+                        qnp.from_euler_angles(
+                            [
+                                np.deg2rad(90),
+                                np.deg2rad(90),
+                                -np.deg2rad(90),
+                            ]
+                        ),
                     ),
                     shift=shift,
                 ),
@@ -118,11 +124,13 @@ class BrickModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles([
-                            np.deg2rad(0),
-                            np.deg2rad(180),
-                            np.deg2rad(90),
-                        ]),
+                        qnp.from_euler_angles(
+                            [
+                                np.deg2rad(0),
+                                np.deg2rad(180),
+                                np.deg2rad(90),
+                            ]
+                        ),
                     ),
                     shift=shift,
                 ),
@@ -135,11 +143,13 @@ class BrickModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles([
-                            np.deg2rad(0),
-                            np.deg2rad(0),
-                            -np.deg2rad(90),
-                        ]),
+                        qnp.from_euler_angles(
+                            [
+                                np.deg2rad(0),
+                                np.deg2rad(0),
+                                -np.deg2rad(90),
+                            ]
+                        ),
                     ),
                     shift=shift,
                 ),
@@ -165,11 +175,13 @@ class BrickModule(Module):
             The angle in radians to rotate the brick.
         """
         # Convert angle to quaternion
-        quat = qnp.from_euler_angles([
-            np.deg2rad(180),
-            -np.deg2rad(180 - angle),
-            np.deg2rad(0),
-        ])
+        quat = qnp.from_euler_angles(
+            [
+                np.deg2rad(180),
+                -np.deg2rad(180 - angle),
+                np.deg2rad(0),
+            ]
+        )
         quat = np.roll(qnp.as_float_array(quat), shift=-1)
 
         # Set the quaternion for the brick body

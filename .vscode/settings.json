@@ -9,19 +9,19 @@
             "path": "${workspaceRoot}/.vscode/project-words.txt"
         }
     },
-    "peacock.color": "#ef6881",
-    "workbench.colorCustomizations": {
-        "editorGroup.border": "#6f9aa9",
-        "panel.border": "#6f9aa9",
-        "sash.hoverBorder": "#6f9aa9",
-        "sideBar.border": "#6f9aa9",
-        "statusBar.background": "#56808f",
-        "statusBar.foreground": "#e7e7e7",
-        "statusBarItem.hoverBackground": "#6f9aa9",
-        "statusBarItem.remoteBackground": "#56808f",
-        "statusBarItem.remoteForeground": "#e7e7e7",
-        "tab.activeBorder": "#6f9aa9"
+    "explorerExclude.backup": {},
+    "files.exclude": {
+        "**/.DS_Store": false,
+        "**/.git": false,
+        "**/.hg": false,
+        "**/.svn": false,
+        "**/Thumbs.db": false
     },
-    "peacock.remoteColor": "#56808f",
-    "python-envs.pythonProjects": []
+    "mypy.dmypyExecutable": "/home/vscode/.local/bin/dmypy",
+    "mypy.mypyExecutable": "/home/vscode/.local/bin/mypy",
+    "python-envs.pythonProjects": [],
+    "ruff.path": [
+        "/home/vscode/.local/bin/ruff"
+    ],
+    "workbench.iconTheme": "material-icon-theme"
 }

@@ -85,7 +85,7 @@ class Individual(SQLModel, table=True):
         if fitness_value is None:
             msg = "Trying to assign `None` to fitness!\n"
             msg += f"--> {self.fitness_value=}"
-            raise ValueError(msg) 
+            raise ValueError(msg)
         self.requires_eval = False
         self.fitness_ = fitness_value
 

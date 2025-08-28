@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 # Headless rendering
-os.environ['MUJOCO_GL']='osmesa'
+os.environ["MUJOCO_GL"] = "osmesa"
 
 # Third-party libraries
 import mujoco

@@ -10,4 +10,4 @@ class Editor(
     def __init__(self, options: Optional[Dict] = None) -> None:
         """Editor"""
         super().__init__()
-        self._props['title'] = "title"
+        self._props["title"] = "title"

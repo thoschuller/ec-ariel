@@ -133,12 +133,8 @@ class EA(AbstractEA):
         # Flexible global parameters
         self.quiet = quiet or config.quiet
         self.console = Console(quiet=self.quiet)
-        self.current_generation = (
-            first_generation_id or config.first_generation_id
-        )
-        self.num_of_generations = (
-            num_of_generations or config.num_of_generations
-        )
+        self.current_generation = first_generation_id or config.first_generation_id
+        self.num_of_generations = num_of_generations or config.num_of_generations
 
         # Bound to global parameters
         self.is_maximisation = config.is_maximisation
@@ -296,7 +292,7 @@ def crossover(population: Population) -> Population:
         child_j.genotype = genotype_j
         child_j.tags = {"mut": True}
         child_j.requires_eval = True
-        
+
         population.extend([child_i, child_j])
     return population
 
