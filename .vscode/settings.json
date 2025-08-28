@@ -23,5 +23,7 @@
     "ruff.path": [
         "/home/vscode/.local/bin/ruff"
     ],
-    "workbench.iconTheme": "material-icon-theme"
+    "workbench.iconTheme": "material-icon-theme",
+    "mypy.enabled": false,
+    "ruff.enable": false
 }
