@@ -13,7 +13,7 @@ import mujoco
 
 # Local libraries
 # If the following line returns an error, run this:
-from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+# from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.environments.simple_flat_world import SimpleFlatWorld
 from ariel.utils.renderers import single_frame_renderer
 
