@@ -32,13 +32,13 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     save_graph_as_json,
 )
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from ariel.environments.amphiteater_heightmap import AmphitheatreTerrainWorld
-from ariel.environments.boxy_heightmap import BoxyRugged
-from ariel.environments.crater_heightmap import CraterTerrainWorld
-from ariel.environments.djoser_pyramid import PyramidWorld
-from ariel.environments.rugged_heightmap import RuggedTerrainWorld
-from ariel.environments.simple_flat_world import SimpleFlatWorld
-from ariel.environments.simple_tilted_world import TiltedFlatWorld
+from ariel.simulation.environments.amphiteater_heightmap import AmphitheatreTerrainWorld
+from ariel.simulation.environments.boxy_heightmap import BoxyRugged
+from ariel.simulation.environments.crater_heightmap import CraterTerrainWorld
+from ariel.simulation.environments.djoser_pyramid import PyramidWorld
+from ariel.simulation.environments.rugged_heightmap import RuggedTerrainWorld
+from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+from ariel.simulation.environments.simple_tilted_world import TiltedFlatWorld
 from ariel.utils.renderers import single_frame_renderer
 
 if TYPE_CHECKING:

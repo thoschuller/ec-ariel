@@ -31,8 +31,8 @@ import matplotlib.pyplot as plt
 import mujoco
 import nevergrad as ng
 import numpy as np
-from ariel.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
-from ariel.environments.simple_flat_world import SimpleFlatWorld
+from ariel.simulation.controllers.cpg_with_sensory_feedback import CPGSensoryFeedback
+from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from rich.console import Console
 
 # Local libraries
