@@ -39,6 +39,7 @@ pip-delete-this-directory.txt
 htmlcov/
 .tox/
 .nox/
+noxfile.py
 .coverage
 .coverage.*
 .cache
@@ -64,6 +65,7 @@ instance/
 .scrapy
 # Sphinx documentation
 docs/_build/
+docs/api
 # PyBuilder
 .pybuilder/
 target/

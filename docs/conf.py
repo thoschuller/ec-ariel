@@ -1,8 +1,8 @@
 """Sphinx configuration."""
 
-project = "B_Hyper"
-author = "jmdm"
-copyright = "2025, jmdm"
+project = "ARIEL"
+author = "CI Group"
+copyright = "2025, CI Group"
 
 html_theme = "shibuya"
 
@@ -26,7 +26,7 @@ autoapi_add_toctree_entry = True
 autoapi_dirs = ["../src"]
 autoapi_template_dir = "_build/autoapi"
 autoapi_options = [
-    "members",
+    # "members",
     "undoc-members",
     "special-members",
     "show-inheritance",
@@ -35,6 +35,8 @@ autoapi_options = [
     "show-module-summary",
     "titles_only=True",
 ]
+add_module_names = False
+autoapi_keep_module_path = False
 
 # Autosummary settings
 autosummary_generate = True
@@ -60,7 +62,7 @@ autodoc_default_options: dict[str, bool | str | list[str]] = {
     # "show-inheritance": True,
     # "special-members": False,
     # "undoc-members": True,
-    # "exclude-members": ["",],
+    # "exclude-members": [",
 }
 
 # Napoleon settings

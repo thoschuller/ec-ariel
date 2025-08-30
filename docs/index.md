@@ -21,6 +21,5 @@ Guide <source/index.rst>
 API Reference <reference>
 Usage <usage>
 Code of Conduct <codeofconduct>
-License <license>
-Changelog <https://github.com/Jacopo-Dm/b_hyper/releases> -->
+License <license> -->
 

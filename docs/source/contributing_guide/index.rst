@@ -20,9 +20,8 @@ For a guideline what can depend on what, look at the package diagram on the main
 ----------------------
 Developer installation
 ----------------------
-The normal installation guide applies. You should definitely use :ref:`editable mode<installation/index:Editable Mode>`.
-Using the ``requirements_dev.txt`` allows you to quickly install all packages in editable mode, by executing: ``pip install -r requirements_dev.txt``.
-If you want to uninstall all Ariel packages, you can use ``./uninstall.sh``, which uninstall all packages like ``Ariel*``.
+The normal installation guide applies. You should definitely use editable mode.
+**Add correct developer installation.**
 
 ----------------------
 Continuous integration

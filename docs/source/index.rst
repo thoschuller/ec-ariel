@@ -33,7 +33,7 @@ Get started below, or explore the full documentation for more details.
 
 Installation Information
 ------------
-See the :ref:`installation guide` for details.
+See the installation guide for more details.
 
 .. toctree::
    :maxdepth: 3

@@ -5,7 +5,7 @@ Running experiments with GUI
 -->
 # Evolutionary Computing Course Documentation
 
-This section contains information more directed torwards the use of ARIEL for the Evolutionary Computing course. Here you can find installation information, basic functions needed for the assignments, and tips on how some things are done using ARIEL.
+This section contains information more directed towards the use of ARIEL for the Evolutionary Computing course. Here you can find installation information, basic functions needed for the assignments, and tips on how some things are done using ARIEL.
 
 ## Run the example files
 After following the normal ARIEL installation guide you can come here for the following steps. We highly recommend you use a virtual environment alongside uv, this will help significantly with requirement conflicts. 
@@ -18,7 +18,7 @@ uv sync
 uv run examples/0_render_single_frame.py 
 ```
 
-These commands will automatically create the virtual environment, activate it, install all the requirements with their respecitve versions to avoid any conflicts and then run the example file. After you create the venv you can activate it again like you would with a normal one using:
+These commands will automatically create the virtual environment, activate it, install all the requirements with their respective versions to avoid any conflicts and then run the example file. After you create the venv you can activate it again like you would with a normal one using:
 ```bash
 Activate venv:
 ./.venv/Scripts/activate
@@ -93,6 +93,6 @@ def main() -> None:
 ### Run Experiments Using the GUI
 For a more detailed explanation on how the GUI works and how to use it check out the {doc}`GUI`.
 
-The way the GUI works is in the form of a "Node Editor". This allows you to highly customise your experiments without needing ot write code. As you can see in the example (although simplified), you can create nodes with your parameters (population size, generations etc) and evolutionary operators (crossover, mutation etc) and link them to create the complete evolutionary process.
+The way the GUI works is in the form of a "Node Editor". This allows you to highly customize your experiments without needing ot write code. As you can see in the example (although simplified), you can create nodes with your parameters (population size, generations etc) and evolutionary operators (crossover, mutation etc) and link them to create the complete evolutionary process.
 
 ![GUI](../resources/GUI.png)

@@ -22,7 +22,7 @@ for f in glob.glob('src/ariel/*.c'): os.remove(f);
 nox.options.default_venv_backend = "uv"
 
 package = "ariel"
-python_versions = ["3.12", "3.13", "3.11", "3.10", "3.9"]
+python_versions = ["3.12.11", "3.13.7"]
 nox.needs_version = ">= 2021.6.6"
 nox.options.sessions = (
     "pre-commit",
