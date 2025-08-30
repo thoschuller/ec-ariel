@@ -1,8 +1,11 @@
-# Reference
-
-## ariel
+# Temp
+<!-- # API Reference
 
 ```{eval-rst}
-.. automodule:: ariel
-   :members:
-```
+.. autosummary::
+   :toctree: api
+   :recursive:
+
+   ariel
+
+``` -->

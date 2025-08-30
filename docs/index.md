@@ -4,6 +4,7 @@ end-before: <!-- github-only -->
 ---
 ```
 
+<!-- TODO: WHAT ARE THESE??? -->
 [license]: license
 [contributor guide]: contributing
 [command-line reference]: usage
@@ -11,13 +12,15 @@ end-before: <!-- github-only -->
 ```{toctree}
 ---
 hidden:
-maxdepth: 1
+maxdepth: 2
 ---
 
-usage
-reference
-contributing
+Guide <source/index.rst>
+```
+<!-- Contributing <contributing>
+API Reference <reference>
+Usage <usage>
 Code of Conduct <codeofconduct>
 License <license>
-Changelog <https://github.com/Jacopo-DM/ariel/releases>
-```
+Changelog <https://github.com/Jacopo-Dm/b_hyper/releases> -->
+
