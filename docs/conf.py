@@ -19,7 +19,11 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "nbsphinx",
 ]
+
+# Myst notebook settings
+nbsphinx_execute = "never" # Do not run notebooks during build
 
 # AutoAPI
 autoapi_add_toctree_entry = True

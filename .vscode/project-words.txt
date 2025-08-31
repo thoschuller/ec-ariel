@@ -462,6 +462,7 @@ matangover
 matchtext
 Mateusz
 matplotlib
+maximisation
 mbf
 mccabe
 mcr

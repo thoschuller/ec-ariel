@@ -44,6 +44,7 @@ See the installation guide for more details.
    installation_guide.md
    extra_info.md
    GUI.md
+   Your first EA with ARIEL <EA_intro/EA_example>
    
 License
 -------
