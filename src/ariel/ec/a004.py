@@ -127,6 +127,25 @@ class EA(AbstractEA):
         first_generation_id: int | None = None,
         quiet: bool | None = None,
     ) -> None:
+        """
+        Initialize an Evolutionary Algorithm (EA) instance.
+
+        Parameters
+        ----------
+        population : Population
+            Initial population.
+        operations : list[EAStep]
+            List of operations to be performed in each generation.
+        num_of_generations : int | None, optional
+            Number of generations to run the EA for, by default None.
+            If None, the value from the global config is used.
+        first_generation_id : int | None, optional
+            ID of the first generation, by default None.
+            If None, the value from the global config is used.
+        quiet : bool | None, optional
+            Whether to suppress console output, by default None.
+            If None, the value from the global config is used.
+        """
         # Local parameters
         self.operations = operations
 
@@ -230,13 +249,22 @@ class EA(AbstractEA):
         )
 
         # Get requested individual
-        match mode:
-            case "best":
-                return self.population[0]
-            case "median":
-                return self.population[len(self.population) // 2]
-            case "worst":
-                return self.population[-1]
+        if config.is_maximisation:
+            match mode:
+                case "best":
+                    return self.population[-1]
+                case "median":
+                    return self.population[len(self.population) // 2]
+                case "worst":
+                    return self.population[0]
+        else:
+            match mode:
+                case "best":
+                    return self.population[0]
+                case "median":
+                    return self.population[len(self.population) // 2]
+                case "worst":
+                    return self.population[-1]
 
     def step(self) -> None:
         self.current_generation += 1
