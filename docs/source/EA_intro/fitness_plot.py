@@ -32,7 +32,7 @@ def fitness_landscape_plot():
     # Create 3D plot
     fig = plt.figure(figsize=(15, 8))
 
-    titles = ["Sphere Function", "Ackley Function"]
+    titles = ["Ackley Function"]
     for idx, z in enumerate([z_multimodal]):
         # Create sub-plot
         ax = fig.add_subplot(121 + idx, projection="3d")
