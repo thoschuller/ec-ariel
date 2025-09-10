@@ -24,7 +24,8 @@ import mujoco
 from mujoco import viewer
 from rich.console import Console
 
-from ariel.body_phenotypes.robogen_lite.config import ModuleFaces, ModuleRotationsTheta
+from ariel.body_phenotypes.robogen_lite.config import (ModuleFaces,
+                                                       ModuleRotationsTheta)
 from ariel.body_phenotypes.robogen_lite.modules.brick import BrickModule
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from ariel.body_phenotypes.robogen_lite.modules.hinge import HingeModule
@@ -211,5 +212,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
     main()

@@ -2,23 +2,10 @@ import sys
 
 from PyQt5.QtCore import QPointF, QRectF, Qt
 from PyQt5.QtGui import QBrush, QPainter, QPainterPath, QPen
-from PyQt5.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QGraphicsEllipseItem,
-    QGraphicsItem,
-    QGraphicsPathItem,
-    QGraphicsScene,
-    QGraphicsView,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PyQt5.QtWidgets import (QApplication, QComboBox, QGraphicsEllipseItem,
+                             QGraphicsItem, QGraphicsPathItem, QGraphicsScene,
+                             QGraphicsView, QHBoxLayout, QLabel, QLineEdit,
+                             QMainWindow, QTabWidget, QVBoxLayout, QWidget)
 # ========================
 # Node Editor Components
 # ========================

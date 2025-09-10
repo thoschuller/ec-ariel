@@ -116,7 +116,9 @@ class PyramidWorld:
             body.add_geom(pos=x_pos_l.copy(), size=size_one.copy(), rgba=color)
             body.add_geom(pos=x_pos_r.copy(), size=size_one.copy(), rgba=color)
             body.add_geom(pos=y_pos_up.copy(), size=size_two.copy(), rgba=color)
-            body.add_geom(pos=y_pos_down.copy(), size=size_two.copy(), rgba=color)
+            body.add_geom(
+                pos=y_pos_down.copy(), size=size_two.copy(), rgba=color
+            )
 
         # Final top platform stays same color (optional: pick RED/BLUE or a third color)
         top_color = RED if self.num_stairs % 2 == 0 else BLUE

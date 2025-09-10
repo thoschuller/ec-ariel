@@ -113,7 +113,7 @@ class EAStep:
     name: str
     operation: Callable[[Population], Population]
 
-    def __call__(self, population: list[Population]) -> Population:
+    def __call__(self, population: Population) -> Population:
         return self.operation(population)
 
 
@@ -150,10 +150,17 @@ class EA(AbstractEA):
         self.operations = operations
 
         # Flexible global parameters
+        self.new_generation_are_survivors = (
+            survivors_are_new_generation or config.survivors_are_new_generation
+        )
         self.quiet = quiet or config.quiet
         self.console = Console(quiet=self.quiet)
-        self.current_generation = first_generation_id or config.first_generation_id
-        self.num_of_generations = num_of_generations or config.num_of_generations
+        self.current_generation = (
+            first_generation_id or config.first_generation_id
+        )
+        self.num_of_generations = (
+            num_of_generations or config.num_of_generations
+        )
 
         # Bound to global parameters
         self.is_maximisation = config.is_maximisation
@@ -249,22 +256,13 @@ class EA(AbstractEA):
         )
 
         # Get requested individual
-        if config.is_maximisation:
-            match mode:
-                case "best":
-                    return self.population[-1]
-                case "median":
-                    return self.population[len(self.population) // 2]
-                case "worst":
-                    return self.population[0]
-        else:
-            match mode:
-                case "best":
-                    return self.population[0]
-                case "median":
-                    return self.population[len(self.population) // 2]
-                case "worst":
-                    return self.population[-1]
+        match mode:
+            case "best":
+                return self.population[0]
+            case "median":
+                return self.population[len(self.population) // 2]
+            case "worst":
+                return self.population[-1]
 
     def step(self) -> None:
         self.current_generation += 1
@@ -335,6 +333,7 @@ def mutation(population: Population) -> Population:
                 mutation_probability=0.5,
             )
             ind.genotype = mutated
+            ind.requires_eval = True
     return population
 
 
@@ -372,10 +371,6 @@ def create_individual() -> Individual:
     return ind
 
 
-def learning(population: Population) -> Population:
-    return population
-
-
 def main() -> None:
     """Entry point."""
     # Create initial population
@@ -384,13 +379,11 @@ def main() -> None:
 
     # Create EA steps
     ops = [
-        EAStep("evaluation", evaluate),
         EAStep("parent_selection", parent_selection),
         EAStep("crossover", crossover),
         EAStep("mutation", mutation),
         EAStep("evaluation", evaluate),
         EAStep("survivor_selection", survivor_selection),
-        EAStep("learning", learning),
     ]
 
     # Initialize EA

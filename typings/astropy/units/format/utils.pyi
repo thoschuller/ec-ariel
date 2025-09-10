@@ -1,0 +1,3 @@
+from collections.abc import Generator, Iterable, Sequence
+
+def get_non_keyword_units(bases: Iterable[str], prefixes: Sequence[str]) -> Generator[tuple[str, str], None, None]: ...

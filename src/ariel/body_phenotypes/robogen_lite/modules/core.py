@@ -10,11 +10,8 @@ import numpy as np
 import quaternion as qnp
 
 # Local libraries
-from ariel.body_phenotypes.robogen_lite.config import (
-    IDX_OF_CORE,
-    ModuleFaces,
-    ModuleType,
-)
+from ariel.body_phenotypes.robogen_lite.config import (IDX_OF_CORE,
+                                                       ModuleFaces, ModuleType)
 from ariel.body_phenotypes.robogen_lite.modules.module import Module
 
 # Type Aliases
@@ -84,13 +81,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(0),
-                                np.deg2rad(180),
-                                np.deg2rad(180),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(0),
+                            np.deg2rad(180),
+                            np.deg2rad(180),
+                        ]),
                     ),
                     shift=shift,
                 ),
@@ -103,13 +98,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(0),
-                                np.deg2rad(0),
-                                np.deg2rad(0),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(0),
+                            np.deg2rad(0),
+                            np.deg2rad(0),
+                        ]),
                     ),
                     shift=shift,
                 ),
@@ -122,13 +115,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(90),
-                                -np.deg2rad(90),
-                                -np.deg2rad(90),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(90),
+                            -np.deg2rad(90),
+                            -np.deg2rad(90),
+                        ]),
                     ),
                     shift=shift,
                 ),
@@ -141,13 +132,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(90),
-                                np.deg2rad(90),
-                                -np.deg2rad(90),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(90),
+                            np.deg2rad(90),
+                            -np.deg2rad(90),
+                        ]),
                     ),
                     shift=shift,
                 ),
@@ -160,13 +149,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(0),
-                                np.deg2rad(180),
-                                np.deg2rad(90),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(0),
+                            np.deg2rad(180),
+                            np.deg2rad(90),
+                        ]),
                     ),
                     shift=shift,
                 ),
@@ -179,13 +166,11 @@ class CoreModule(Module):
             quat=np.round(
                 np.roll(
                     qnp.as_float_array(
-                        qnp.from_euler_angles(
-                            [
-                                np.deg2rad(0),
-                                np.deg2rad(0),
-                                -np.deg2rad(90),
-                            ]
-                        ),
+                        qnp.from_euler_angles([
+                            np.deg2rad(0),
+                            np.deg2rad(0),
+                            -np.deg2rad(90),
+                        ]),
                     ),
                     shift=shift,
                 ),

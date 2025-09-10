@@ -23,7 +23,7 @@ class RoboGenCoreExtractor:
 
     def track_core_geoms(self) -> list:
         """Extract core geoms from mujoco data.
-
+        
         Returns
         -------
         list
@@ -32,7 +32,7 @@ class RoboGenCoreExtractor:
 
     def get_core_path(self) -> np.ndarray:
         """Get the path of core geoms -> [xpos, xpos, ...]
-
+        
         Returns
         -------
         np.ndarray
@@ -46,7 +46,7 @@ class RoboGenCoreExtractor:
 
     def xyz_displacement_extractor(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the first and last core geom xpos for displacement calculation.
-
+        
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
@@ -57,7 +57,7 @@ class RoboGenCoreExtractor:
 
     def xy_displacement_extractor(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the first and last core geom (x,y)-position for displacement calculation.
-
+        
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
@@ -67,4 +67,5 @@ class RoboGenCoreExtractor:
         return core_path[0, :2], core_path[-1, :2] if core_path.size > 0 else (
             None,
             None,
+        )
         )

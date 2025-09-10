@@ -28,8 +28,6 @@ RNG = np.random.default_rng(SEED)
 # Type Aliases
 type Integers = Sequence[int]
 type Floats = Sequence[float]
-# type Strings = Sequence[str]
-type Graphs = Sequence[str]
 
 
 class IntegersGeneratorSettings(BaseSettings):
