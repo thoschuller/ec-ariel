@@ -11,10 +11,10 @@
     },
     "explorerExclude.backup": {},
     "files.exclude": {
-        "**/.DS_Store": false,
         "**/.git": false,
-        "**/.hg": false,
         "**/.svn": false,
+        "**/.hg": false,
+        "**/.DS_Store": true,
         "**/Thumbs.db": false
     },
     "mypy.dmypyExecutable": "/home/vscode/.local/bin/dmypy",

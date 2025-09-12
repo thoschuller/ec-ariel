@@ -135,7 +135,7 @@ class HingeModule(Module):
             biasprm=biasprm,
             trntype=trntype,
             target=servo_name,
-            ctrlrange=(-np.pi, -np.pi),  # [-180, 180] degrees
+            ctrlrange=(-np.pi/2, np.pi/2),  # [-90, 90] degrees (range of 180)
         )
 
         # Save model specifications

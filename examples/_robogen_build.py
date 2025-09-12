@@ -191,12 +191,13 @@ def run(
     # Reset state and time of simulation
     mujoco.mj_resetData(model, data)
 
-    # Render
-    single_frame_renderer(model, data, steps=10)
 
     # View
     if with_viewer:
         viewer.launch(model=model, data=data)
+    else:
+        # Render
+        single_frame_renderer(model, data, steps=10)
 
 
 def main() -> None:
