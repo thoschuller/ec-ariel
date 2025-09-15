@@ -16,17 +16,14 @@ def gecko():
     neck = HingeModule(
         index=1,
     )
-    neck2 = HingeModule(
-        index=21,
-    )
-    neck.rotate(-90)
+    # neck.rotate(-90)
     abdomen = BrickModule(
         index=2,
     )
     spine = HingeModule(
         index=3,
     )
-    spine.rotate(90)
+    # spine.rotate(90)
     butt = BrickModule(
         index=4,
     )
@@ -34,7 +31,7 @@ def gecko():
     fl_leg = HingeModule(
         index=5,
     )
-    fl_leg.rotate(45)
+    fl_leg.rotate(90)
     fl_leg2 = HingeModule(
         index=15,
     )
@@ -47,7 +44,7 @@ def gecko():
     fr_leg = HingeModule(
         index=7,
     )
-    fr_leg.rotate(-45)
+    fr_leg.rotate(-90)
     fr_leg2 = HingeModule(
         index=17,
     )
@@ -59,12 +56,14 @@ def gecko():
     bl_leg = HingeModule(
         index=9,
     )
+    bl_leg.rotate(45)
     bl_flipper = BrickModule(
         index=10,
     )
     br_leg = HingeModule(
         index=11,
     )
+    br_leg.rotate(-45)
     br_flipper = BrickModule(
         index=12,
     )
@@ -131,5 +130,4 @@ def gecko():
         body=br_flipper.body,
         prefix="br_flipper",
     )
-
     return core
