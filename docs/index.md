@@ -2,7 +2,7 @@
 
 # Ariel Documentation
 
-![Ariel Logo](../resources/ariel_header_rounded.png)
+![Ariel Logo](../resources/ariel_header_rounded.jpg)
 
 Ariel is a Python package, similar to Revolve, that provides efficient and easy-to-use tools for many aspects of evolutionary computing and evolutionary robotics.  
 It is designed with a clear API, sensible defaults, and support for both beginners and advanced users.
