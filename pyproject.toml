@@ -8,9 +8,7 @@ license = { text = "GPL-3.0" }
 authors = [{ name = "jmdm", email = "jmdm.880@gmail.com" }]
 classifiers = ["Development Status :: 2 - Pre-Alpha"]
 
-dependencies = [
-    "pandoc>=2.4",
-]
+dependencies = []
 
 
 [project.urls]
@@ -25,6 +23,8 @@ docs = [
   "linkify-it-py>=2.0.3",
   "myst-parser>=3.0.1",
   "nbsphinx>=0.9.7",
+  "pandoc>=2.4",
+  "pypandoc>=1.15",
   "shibuya>=2025.8.16",
   "sphinx-autoapi>=3.6.0",
   "sphinx-autobuild>=2024.10.3",
