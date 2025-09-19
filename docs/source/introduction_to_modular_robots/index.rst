@@ -18,8 +18,8 @@ Modules
 At the center of the robot lies the core module, which contains the brain.
 
 .. image:: ../../resources/core.png
-  :width: 400
   :alt: A core module
+  :width: 400
 
 Other modules are attached to the core in its sides.
 Brick are passive blocks to which again modules can be attached.
