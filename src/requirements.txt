@@ -11,3 +11,5 @@ pydantic_settings
 rich
 SQLAlchemy
 sqlmodel
+torch
+torchvision
