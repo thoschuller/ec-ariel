@@ -22,6 +22,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosectionlabel",
+    "sphinx.ext.todo",
 ]
 
 add_module_names = False
