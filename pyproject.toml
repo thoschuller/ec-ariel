@@ -8,7 +8,9 @@ license = { text = "GPL-3.0" }
 authors = [{ name = "jmdm", email = "jmdm.880@gmail.com" }]
 classifiers = ["Development Status :: 2 - Pre-Alpha"]
 
-dependencies = []
+dependencies = [
+    "pandoc>=2.4",
+]
 
 
 [project.urls]
