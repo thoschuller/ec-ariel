@@ -12,10 +12,12 @@ dependencies = [
     "matplotlib>=3.9.4",
     "mujoco>=3.3.6",
     "networkx>=3.2.1",
+    "nevergrad>=1.0.12",
     "nicegui>=2.24.1",
     "noise>=1.2.2",
     "numpy>=2.0.2",
     "numpy-quaternion>=2023.0.3",
+    "opencv-python>=4.11.0.86",
     "pillow>=11.3.0",
     "pydantic>=2.11.9",
     "pydantic-settings>=2.10.1",
@@ -32,6 +34,9 @@ Documentation = "https://ariel.readthedocs.io"
 Changelog = "https://github.com/ci-group/ariel/releases"
 
 [dependency-groups]
+dev = [
+    "opencv-stubs>=0.1.0",
+]
 docs = [
   "jupyter-sphinx>=0.5.3",
   "linkify-it-py>=2.0.3",
