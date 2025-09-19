@@ -343,7 +343,8 @@ def main():
     gen = 0
     while gen < generations:
 
-        searcher.run(1)
+        searcher.run(5)
+        gen += 5
         best_weights = searcher.status['best']
 
         best_fit = run_episode(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=True)
