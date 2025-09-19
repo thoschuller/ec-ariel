@@ -2,14 +2,16 @@
 from typing import Any
 
 import evotorch.logging
+import matplotlib
 import numpy as np
 import mujoco
 from mujoco import viewer
 import matplotlib.pyplot as plt
 from evotorch import Problem
-from evotorch.algorithms import SNES
+from evotorch.algorithms import SteadyStateGA, Cosyne, SNES
 import time
 import os
+import multiprocessing
 
 # if you get errors here, you may need to install torch and torchvision
 # uv pip install torch torchvision --torch-backend=auto
@@ -31,14 +33,16 @@ HISTORY = []
 # === Experiment Constants ===
 SEGMENT_LENGTH = 100
 POP_SIZE = 50
-MAX_GENERATIONS = 50
+MAX_GENERATIONS = 15000
+TIME_LIMIT = 3600  # in seconds
 HIDDEN_SIZE = 16
-SIM_STEPS = 1000
+SIM_STEPS = 5000
 OUTPUT_DELTA = 0.05
 NUM_HIDDEN_LAYERS = 3
-FITNESS_MODE = "segment_median"  # Options: "segment_median", "simple"
-INTERACTIVE_MODE = True  # If True, show and ask every 5 generations; if False, run to max
+FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
+INTERACTIVE_MODE = False  # If True, show and ask every 5 generations; if False, run to max
 RECORD_LAST = True
+BATCH_SIZE = 10  # Number of generations to run between displays in interactive mode
 # In interactive mode, you need to close the mujoco viewer window to continue with the next batch
 # ===========================
 
@@ -46,6 +50,10 @@ RECORD_LAST = True
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
+
+plt.ion()
+
+# matplotlib.use('PyQt5') 
 
 def numpy_nn_controller_move(model, data, to_track) -> None:
     """
@@ -103,48 +111,18 @@ def assign_flat_weights_to_model(model, flat_weights):
 
 
 
-def torch_nn_controller(model, data, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS) -> None:
+def torch_nn_controller(model, data, to_track) -> None:
     """
-Improved neural network controller with variable layers and weights from torch
-based on https://docs.pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html
-"""
-
-    # torch_device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+    Neural network controller: forward pass only (model is pre-instantiated and weighted)
+    """
     torch_device = torch.device(DEVICE)
-
-    class NeuralNetwork(nn.Module):
-        def __init__(self, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
-            super(NeuralNetwork, self).__init__()
-            layers = []
-            layers.append(nn.Linear(input_size, hidden_size))
-            layers.append(nn.Sigmoid())
-            for _ in range(NUM_HIDDEN_LAYERS - 1):
-                layers.append(nn.Linear(hidden_size, hidden_size))
-                layers.append(nn.Sigmoid())
-            layers.append(nn.Linear(hidden_size, output_size))
-            layers.append(nn.Sigmoid())
-            self.network = nn.Sequential(*layers)
-
-        def forward(self, x):
-            return self.network(x)
-
-    model = NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
-
-    assign_flat_weights_to_model(model, weights)
-
-
-    # get outputs
     inputs = torch.tensor(data.qpos, dtype=torch.float32, device=torch_device)
-    # outputs = model(inputs).cpu().detach().numpy() - 0.5  # Center around 0
     outputs = model(inputs).detach().numpy() - 0.5  # Center around 0
     data.ctrl += outputs * OUTPUT_DELTA
-    # check and print whether any control signal is larger than pi/2
     if np.any(np.abs(data.ctrl) > (np.pi / 2) + 0.05):
         print("Warning: Control signal out of bounds:", data.ctrl)
-    data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2) # should be redundant with above scaling
+    data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2)
     HISTORY.append(to_track[0].xpos.copy())
-
-
 
 # fitness function
 def fitness() -> floating[Any] | float | Any:
@@ -175,29 +153,31 @@ def show_qpos_history(history: list, fitness: float):
     # Convert list of [x,y,z] positions to numpy array
     pos_data = np.array(history)
 
-    # Create figure and axis
-    plt.figure(figsize=(10, 6))
+    fig, ax = plt.subplots(1, figsize=(10, 6))
 
     # Plot x,y trajectory
-    plt.plot(pos_data[:, 0], pos_data[:, 1], 'b-', label='Path')
-    plt.plot(pos_data[0, 0], pos_data[0, 1], 'go', label='Start')
-    plt.plot(pos_data[-1, 0], pos_data[-1, 1], 'ro', label='End')
+    ax.plot(pos_data[:, 0], pos_data[:, 1], 'b-', label='Path')
+    ax.plot(pos_data[0, 0], pos_data[0, 1], 'go', label='Start')
+    ax.plot(pos_data[-1, 0], pos_data[-1, 1], 'ro', label='End')
 
     # Add labels and title
-    plt.xlabel('X Position')
-    plt.ylabel('Y Position')
+    ax.set_xlabel('X Position')
+    ax.set_ylabel('Y Position')
     total_dist = np.linalg.norm(pos_data[-1, :2] - pos_data[0, :2])
-    plt.title(f'Robot Path in XY Plane\nFitness (XY progress): {fitness:.4f}, Total Dist: {total_dist:.4f}')
-    plt.legend()
-    plt.grid(True)
+    ax.set_title(f'Robot Path in XY Plane\nFitness (XY progress): {fitness:.4f}, Total Dist: {total_dist:.4f}')
+    ax.legend()
+    ax.grid(True)
 
-    # Set equal aspect ratio and center at (0,0)
-    plt.axis('equal')
-    max_range = max(abs(pos_data).max(), 0.3)  # At least 1.0 to avoid empty plots
-    plt.xlim(-max_range, max_range)
-    plt.ylim(-max_range, max_range)
+    # Equal aspect & bounds
+    ax.set_aspect('equal', adjustable='box')
+    max_range = max(float(np.abs(pos_data).max()), 0.3)
+    ax.set_xlim(-max_range, max_range)
+    ax.set_ylim(-max_range, max_range)
 
-    plt.show()
+    fig.tight_layout()
+
+    fig.canvas.draw()
+    plt.pause(0.1)  # Pause to update the plot
 
 
 # Save genotype and fitness
@@ -235,7 +215,8 @@ def show_in_gui(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
     def controller(m, d):
-        torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        torch_nn_controller(m, d, to_track)
 
     mujoco.set_mjcb_control(controller)
     mujoco.viewer.launch(model, data)
@@ -254,8 +235,27 @@ def run_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
+    # Instantiate NN model and assign weights ONCE per episode
+    torch_device = torch.device(DEVICE)
+    class NeuralNetwork(nn.Module):
+        def __init__(self, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
+            super(NeuralNetwork, self).__init__()
+            layers = []
+            layers.append(nn.Linear(input_size, hidden_size, bias=False))
+            layers.append(nn.ReLU())
+            for _ in range(NUM_HIDDEN_LAYERS - 1):
+                layers.append(nn.Linear(hidden_size, hidden_size, bias=False))
+                layers.append(nn.ReLU())
+            layers.append(nn.Linear(hidden_size, output_size, bias=False))
+            layers.append(nn.Sigmoid())
+            self.network = nn.Sequential(*layers)
+        def forward(self, x):
+            return self.network(x)
+    nn_model = NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
+    assign_flat_weights_to_model(nn_model, weights)
+
     def controller(m, d):
-        torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        torch_nn_controller(nn_model, d, to_track)
 
     mujoco.set_mjcb_control(controller)
     for _ in range(SIM_STEPS):
@@ -287,7 +287,9 @@ def record_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAY
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
     def controller(m, d):
-        torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        torch_nn_controller(m, d, to_track)
+
 
     mujoco.set_mjcb_control(controller)
 
@@ -333,27 +335,32 @@ def main():
             w = np.asarray(weights, dtype=np.float32)
         return run_episode(w, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
 
-    problem = Problem("max", evo_fitness, solution_length=total_weights, initial_bounds=(-1.0, 1.0), device=DEVICE)
+    cores = multiprocessing.cpu_count() -1
+    print(f"Running on {cores} cores")
+    problem = Problem("max", evo_fitness, solution_length=total_weights, initial_bounds=(-1.0, 1.0), device=DEVICE, num_actors=cores)
 
     searcher = SNES(problem, popsize=POP_SIZE, stdev_init=0.025)
+    # searcher = Cosyne(problem, popsize=POP_SIZE, tournament_size=6, mutation_stdev=0.1)
     logger = evotorch.logging.StdOutLogger(searcher)
 
 
     generations = MAX_GENERATIONS
     gen = 0
-    while gen < generations:
-
-        searcher.run(5)
-        gen += 5
+    while gen < generations and (time.time() - begin_time) < TIME_LIMIT:
+        for _ in range(BATCH_SIZE):  # Run multiple generations between each display
+            gen_start = time.time()
+            searcher.step()
+            gen_end = time.time()
+            print(f"Time for generation: {(gen_end - gen_start):.2f} seconds")
+            gen += 1
         best_weights = searcher.status['best']
-
         best_fit = run_episode(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=True)
         print("Current best fitness:", best_fit)
 
         if INTERACTIVE_MODE:
             print("Showing best solution in MuJoCo GUI...")
             show_in_gui(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
-            cont = input("Continue for 5 more generations? (y/n): ").strip().lower()
+            cont = input("Continue for another batch of generations? (y/n): ").strip().lower()
             if cont != 'y':
                 print("Stopping evolution.")
                 break
@@ -369,4 +376,7 @@ def main():
 
 
 if __name__ == "__main__":
+    begin_time = time.time()
     main()
+    end_time = time.time()
+    print(f"Total execution time: {end_time - begin_time:.2f} seconds")
