@@ -193,49 +193,8 @@ def save_genotype(weights, fitness, filename=None):
     np.savez(filename, weights=weights, fitness=fitness)
     print(f"Saved best genotype to {filename}")
 
-
-# Load and rerun genotype
-def load_and_rerun_genotype(filename, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
-    data = np.load(filename)
-    weights = data['weights']
-    fitness_val = data['fitness']
-    print(f"Loaded genotype from {filename} with fitness {fitness_val}")
-    fit = run_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=True, show_gui=True)
-    print(f"Re-run fitness: {fit}")
-
-
-# Show simulation in GUI
-def show_in_gui(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
-    world = SimpleFlatWorld()
-    gecko_core = gecko()
-    world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
-    model = world.spec.compile()
-    data = mujoco.MjData(model)
-    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
-
-    def controller(m, d):
-        # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
-        torch_nn_controller(m, d, to_track)
-
-    mujoco.set_mjcb_control(controller)
-    mujoco.viewer.launch(model, data)
-    mujoco.set_mjcb_control(None)
-
-
-# Update run_episode to support show_gui
-def run_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=False, show_gui=False):
-    global HISTORY
-    HISTORY = []
-    world = SimpleFlatWorld()
-    gecko_core = gecko()
-    world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
-    model = world.spec.compile()
-    data = mujoco.MjData(model)
-    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
-
-    # Instantiate NN model and assign weights ONCE per episode
+def create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS) -> nn.Module:
+    
     torch_device = torch.device(DEVICE)
     class NeuralNetwork(nn.Module):
         def __init__(self, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
@@ -251,7 +210,55 @@ def run_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS
             self.network = nn.Sequential(*layers)
         def forward(self, x):
             return self.network(x)
-    nn_model = NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
+    return NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
+
+
+# Load and rerun genotype
+def load_and_rerun_genotype(filename, nn_model, record=False):
+    data = np.load(filename)
+    weights = data['weights']
+    fitness_val = data['fitness']
+    print(f"Loaded genotype from {filename} with fitness {fitness_val}")
+    if record:
+        record_episode(weights, nn_model, fitness_val, duration=60)
+    else:
+        run_episode(weights, nn_model, render=True, show_gui=True)
+
+
+# Show simulation in GUI
+def show_in_gui(weights, nn_model):
+    world = SimpleFlatWorld()
+    gecko_core = gecko()
+    world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
+    model = world.spec.compile()
+    data = mujoco.MjData(model)
+    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
+    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
+
+    assign_flat_weights_to_model(nn_model, weights)
+
+    def controller(m, d):
+        # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        torch_nn_controller(nn_model, d, to_track)
+
+    mujoco.set_mjcb_control(controller)
+    mujoco.viewer.launch(model, data)
+    mujoco.set_mjcb_control(None)
+
+
+# Update run_episode to support show_gui
+def run_episode(weights, nn_model, render=False, show_gui=False):
+    global HISTORY
+    HISTORY = []
+    world = SimpleFlatWorld()
+    gecko_core = gecko()
+    world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
+    model = world.spec.compile()
+    data = mujoco.MjData(model)
+    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
+    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
+
+    #  assign weights once per episode    
     assign_flat_weights_to_model(nn_model, weights)
 
     def controller(m, d):
@@ -265,16 +272,16 @@ def run_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS
     if render:
         show_qpos_history(HISTORY, fit)
     if show_gui:
-        mujoco.viewer.launch(model, data)
+        show_in_gui(weights,nn_model)
     return fit
 
-def run_episode_star(args):
-    """
-    Wrapper to unpack arguments for parallel execution
-    """
-    return run_episode(*args)
+# def run_episode_star(args):
+#     """
+#     Wrapper to unpack arguments for parallel execution
+#     """
+#     return run_episode(*args)
 
-def record_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, fitness, filename=None, duration=30):
+def record_episode(weights, nn_model, fitness, filename=None, duration=30):
     if filename is None:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         filename = f"recorded_episode_{FITNESS_MODE}_{fitness}_{timestamp}.mp4"
@@ -286,16 +293,16 @@ def record_episode(weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAY
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
+    assign_flat_weights_to_model(nn_model, weights)
+
     def controller(m, d):
         # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
-        torch_nn_controller(m, d, to_track)
-
-
-    mujoco.set_mjcb_control(controller)
+        torch_nn_controller(nn_model, d, to_track)
 
     # Non-default VideoRecorder options
     PATH_TO_VIDEO_FOLDER = "./output/videos"
-    video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER, file_name=filename)
+    video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER, file_name=filename, width=1200, height=960, fps=30)
+    mujoco.set_mjcb_control(controller)
 
     # Render with video recorder
     video_renderer(
@@ -324,6 +331,8 @@ def main():
     bias_shapes = [(layer_sizes[i + 1],) for i in range(len(layer_sizes) - 1)]
     total_weights = sum(a * b + b for a, b in weight_shapes)  # weights + biases for each layer
 
+    nn_model = create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+
     # based on https://docs.evotorch.ai/v0.4.0/quickstart/#problem-definition
 
     def evo_fitness(weights):
@@ -333,7 +342,7 @@ def main():
             # w = weights.detach().cpu().numpy()
         else:
             w = np.asarray(weights, dtype=np.float32)
-        return run_episode(w, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+        return run_episode(w, nn_model)
 
     cores = multiprocessing.cpu_count() -1
     print(f"Running on {cores} cores")
@@ -354,7 +363,7 @@ def main():
             print(f"Time for generation: {(gen_end - gen_start):.2f} seconds")
             gen += 1
         best_weights = searcher.status['best']
-        best_fit = run_episode(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=True)
+        best_fit = run_episode(np.array(best_weights), nn_model, render=True)
         print("Current best fitness:", best_fit)
 
         if INTERACTIVE_MODE:
@@ -366,13 +375,13 @@ def main():
                 break
     input("Best weights found, run final episode with rendering and GUI... (press Enter to continue)")
 
-    final_fit = run_episode(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, render=True)
+    final_fit = run_episode(np.array(best_weights), nn_model, render=True)
     save_genotype(best_weights, final_fit)
     show_in_gui(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
     print("Final fitness:", final_fit)
     print("mean fitness of last population:", searcher.status['mean_eval'])
     if RECORD_LAST:
-        record_episode(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS, final_fit)
+        record_episode(np.array(best_weights), nn_model, final_fit)
 
 
 if __name__ == "__main__":
@@ -380,3 +389,23 @@ if __name__ == "__main__":
     main()
     end_time = time.time()
     print(f"Total execution time: {end_time - begin_time:.2f} seconds")
+
+# example call to load and rerun a saved genotype
+# if __name__ == "__main__":
+#     world = SimpleFlatWorld()
+#     gecko_core = gecko()
+#     world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
+#     model = world.spec.compile()
+#     data = mujoco.MjData(model)
+#     input_size = len(data.qpos)
+#     hidden_size = HIDDEN_SIZE
+#     output_size = model.nu
+#     # Calculate total weights for configurable layers (weights + biases)
+#     layer_sizes = [input_size] + [hidden_size] * NUM_HIDDEN_LAYERS + [output_size]
+#     weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
+#     bias_shapes = [(layer_sizes[i + 1],) for i in range(len(layer_sizes) - 1)]
+#     total_weights = sum(a * b + b for a, b in weight_shapes)  # weights + biases for each layer
+
+#     nn_model = create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+#     begin_time = time.time()
+#     load_and_rerun_genotype('..\\output\\best_genotype_simple_0.5314192305458384_20250919-193813.npz', nn_model, record=False)
