@@ -33,10 +33,10 @@ SEGMENT_LENGTH = 100
 POP_SIZE = 50
 MAX_GENERATIONS = 50
 HIDDEN_SIZE = 16
-SIM_STEPS = 50
+SIM_STEPS = 1000
 OUTPUT_DELTA = 0.05
-NUM_HIDDEN_LAYERS = 2
-FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
+NUM_HIDDEN_LAYERS = 3
+FITNESS_MODE = "segment_median"  # Options: "segment_median", "simple"
 INTERACTIVE_MODE = True  # If True, show and ask every 5 generations; if False, run to max
 RECORD_LAST = True
 # In interactive mode, you need to close the mujoco viewer window to continue with the next batch
