@@ -137,7 +137,8 @@ def tracking_video_renderer(
     data: mujoco.MjData,
     duration: float = 10.0,
     video_recorder: VideoRecorder | None = None,
-    tracking_distance: float = 1.0
+    tracking_distance: float = 1.5,
+    tracking_angle : float = 135
 ) -> None:
     """
     Render a video of the simulation with camera tracking the "core" module.
@@ -153,9 +154,7 @@ def tracking_video_renderer(
     video_recorder : VideoRecorder | None, optional
         The video recorder to use, by default None
     tracking_distance : float, optional
-        Distance from the core module for camera positioning, by default 5.0
-    tracking_height : float, optional
-        Height offset for camera positioning, by default 2.0
+        Distance from the core module for camera positioning, by default 1.5.0
     """
     # Get video recorder
     if video_recorder is None:
@@ -205,7 +204,7 @@ def tracking_video_renderer(
             camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
             camera.trackbodyid = core_body_id
             camera.distance = tracking_distance
-            camera.azimuth = 45.0  # Angle around the target
+            camera.azimuth = tracking_angle  # Angle around the target
             camera.elevation = -30.0  # Angle above/below the target
             
             # Update the renderer's camera
