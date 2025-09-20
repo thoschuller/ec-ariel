@@ -1,16 +1,15 @@
 # Third-party libraries
-import numpy as np
-import mujoco
-from mujoco import viewer
 import matplotlib.pyplot as plt
-
-# Local libraries
-from ariel.utils.renderers import video_renderer
-from ariel.utils.video_recorder import VideoRecorder
-from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+import mujoco
+import numpy as np
+from mujoco import viewer
 
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
+from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+# Local libraries
+from ariel.utils.renderers import video_renderer
+from ariel.utils.video_recorder import VideoRecorder
 
 # Keep track of data / history
 HISTORY = []
@@ -55,7 +54,9 @@ def random_move(model, data, to_track) -> None:
 
     # Bound the control values to be within the hinge limits.
     # If a value goes outside the bounds it might result in jittery movement.
-    data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
+    # data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
+    data.ctrl = [0 for i in range(len(data.ctrl))]
+    data.ctrl[0] = 1.5
 
     # Save movement to history
     HISTORY.append(to_track[0].xpos.copy())
@@ -132,25 +133,25 @@ def main():
 
     # This opens a viewer window and runs the simulation with the controller you defined
     # If mujoco.set_mjcb_control(None), then you can control the limbs yourself.
-    viewer.launch(
-        model=model,  # type: ignore
-        data=data,
-    )
+    # viewer.launch(
+    #     model=model,  # type: ignore
+    #     data=data,
+    # )
 
+    # Non-default VideoRecorder options
+    PATH_TO_VIDEO_FOLDER = "./__videos__"
+    video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER)
+
+    # Render with video recorder
+    video_renderer(
+        model,
+        data,
+        duration=30,
+        video_recorder=video_recorder,
+    )
+    
     show_qpos_history(HISTORY)
     # If you want to record a video of your simulation, you can use the video renderer.
-
-    # # Non-default VideoRecorder options
-    # PATH_TO_VIDEO_FOLDER = "./__videos__"
-    # video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER)
-
-    # # Render with video recorder
-    # video_renderer(
-    #     model,
-    #     data,
-    #     duration=30,
-    #     video_recorder=video_recorder,
-    # )
 
 if __name__ == "__main__":
     main()
