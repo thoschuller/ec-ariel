@@ -11,6 +11,7 @@ from evotorch import Problem
 from evotorch.algorithms import SteadyStateGA, Cosyne, SNES
 import time
 import os
+from pathlib import Path
 import multiprocessing
 
 # if you get errors here, you may need to install torch and torchvision
@@ -27,20 +28,17 @@ from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
-# Keep track of data / history
-HISTORY = []
-
 # === Experiment Constants ===
 SEGMENT_LENGTH = 100
 POP_SIZE = 150
 MAX_GENERATIONS = 15000
-TIME_LIMIT = 3600  # in seconds
+TIME_LIMIT = 60 * 60  # in seconds
 HIDDEN_SIZE = 16
-SIM_STEPS = 5000
+SIM_STEPS = 2500
 OUTPUT_DELTA = 0.05
 NUM_HIDDEN_LAYERS = 3
 FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
-INTERACTIVE_MODE = False  # If True, show and ask every 5 generations; if False, run to max
+INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 RECORD_LAST = True
 BATCH_SIZE = 10  # Number of generations to run between displays in interactive mode
 # In interactive mode, you need to close the mujoco viewer window to continue with the next batch
@@ -50,12 +48,13 @@ BATCH_SIZE = 10  # Number of generations to run between displays in interactive 
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
+PARALLEL_CORES = multiprocessing.cpu_count() - 1 # leave one core for the system
 
 plt.ion()
 
 # matplotlib.use('PyQt5') 
 
-def numpy_nn_controller_move(model, data, to_track) -> None:
+def numpy_nn_controller_move(model, data, to_track, history) -> None:
     """
     example neural network controller, based on the seminar version
     """
@@ -84,7 +83,7 @@ def numpy_nn_controller_move(model, data, to_track) -> None:
     data.ctrl = np.clip(outputs, -np.pi / 2, np.pi / 2)
 
     # save movements in history
-    HISTORY.append(to_track[0].xpos.copy())
+    history.append(to_track[0].xpos.copy())
 
 # convert weights to prevent stubborn errors
 def assign_flat_weights_to_model(model, flat_weights):
@@ -107,37 +106,41 @@ def assign_flat_weights_to_model(model, flat_weights):
         state_dict[key] = torch.tensor(chunk.reshape(shape), dtype=torch.float32)
         idx += size
 
+    if idx != len(flat_weights):
+        print(f"Warning: not all weights used, {len(flat_weights) - idx} remaining")
+
     model.load_state_dict(state_dict, strict=True)
 
 
 
-def torch_nn_controller(model, data, to_track) -> None:
+def torch_nn_controller(model, data, to_track, history) -> None:
     """
     Neural network controller: forward pass only (model is pre-instantiated and weighted)
     """
     torch_device = torch.device(DEVICE)
     inputs = torch.tensor(data.qpos, dtype=torch.float32, device=torch_device)
-    outputs = model(inputs).detach().numpy() - 0.5  # Center around 0
+    with torch.no_grad():
+        outputs = model(inputs).cpu().numpy() 
     data.ctrl += outputs * OUTPUT_DELTA
-    if np.any(np.abs(data.ctrl) > (np.pi / 2) + 0.05):
+    if np.any(np.abs(data.ctrl) > (np.pi / 2) * 1.05):
         print("Warning: Control signal out of bounds:", data.ctrl)
     data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2)
-    HISTORY.append(to_track[0].xpos.copy())
+    history.append(to_track[0].xpos.copy())
 
 # fitness function
-def fitness() -> floating[Any] | float | Any:
+def fitness(history) -> floating[Any] | float | Any:
     """
     Calculates fitness based on history as euclidian distance or median of segment distances + mean euclidian distance per segment
     """
 
-    start = np.array(HISTORY[0][:2])
-    end = np.array(HISTORY[-1][:2])
+    start = np.array(history[0][:2])
+    end = np.array(history[-1][:2])
     euclidian_distance = np.linalg.norm(end - start)
 
     if FITNESS_MODE == "simple":
         return euclidian_distance # Simple: total distance from start to end
     # Default: segment_median
-    positions = np.array(HISTORY)
+    positions = np.array(history)
     segment_length = SEGMENT_LENGTH
     num_segments = len(positions) // segment_length
     distances = []
@@ -183,13 +186,13 @@ def show_qpos_history(history: list, fitness: float):
 # Save genotype and fitness
 def save_genotype(weights, fitness, filename=None):
     # create folder if not exists
-    if not os.path.exists(".\\output"):
-        os.makedirs(".\\output")
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
 
 
     if filename is None:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        filename = f".\\output\\best_genotype_{FITNESS_MODE}_{fitness}_{timestamp}.npz"
+        filename = output_dir / f"best_genotype_{FITNESS_MODE}_{fitness}_{timestamp}.npz"
     np.savez(filename, weights=weights, fitness=fitness)
     print(f"Saved best genotype to {filename}")
 
@@ -200,18 +203,17 @@ def create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS) -> 
         def __init__(self, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS):
             super(NeuralNetwork, self).__init__()
             layers = []
-            layers.append(nn.Linear(input_size, hidden_size, bias=False))
+            layers.append(nn.Linear(input_size, hidden_size, bias=True))
             layers.append(nn.ReLU())
             for _ in range(NUM_HIDDEN_LAYERS - 1):
-                layers.append(nn.Linear(hidden_size, hidden_size, bias=False))
+                layers.append(nn.Linear(hidden_size, hidden_size, bias=True))
                 layers.append(nn.ReLU())
-            layers.append(nn.Linear(hidden_size, output_size, bias=False))
-            layers.append(nn.Sigmoid())
+            layers.append(nn.Linear(hidden_size, output_size, bias=True))
+            layers.append(nn.Tanh())
             self.network = nn.Sequential(*layers)
         def forward(self, x):
             return self.network(x)
     return NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
-
 
 # Load and rerun genotype
 def load_and_rerun_genotype(filename, nn_model, record=False):
@@ -234,12 +236,13 @@ def show_in_gui(weights, nn_model):
     data = mujoco.MjData(model)
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
+    history = []
 
     assign_flat_weights_to_model(nn_model, weights)
 
     def controller(m, d):
         # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
-        torch_nn_controller(nn_model, d, to_track)
+        torch_nn_controller(nn_model, d, to_track, history)
 
     mujoco.set_mjcb_control(controller)
     mujoco.viewer.launch(model, data)
@@ -248,8 +251,7 @@ def show_in_gui(weights, nn_model):
 
 # Update run_episode to support show_gui
 def run_episode(weights, nn_model, render=False, show_gui=False):
-    global HISTORY
-    HISTORY = []
+    history = []
     world = SimpleFlatWorld()
     gecko_core = gecko()
     world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
@@ -258,19 +260,20 @@ def run_episode(weights, nn_model, render=False, show_gui=False):
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
+
     #  assign weights once per episode    
     assign_flat_weights_to_model(nn_model, weights)
 
     def controller(m, d):
-        torch_nn_controller(nn_model, d, to_track)
+        torch_nn_controller(nn_model, d, to_track, history)
 
     mujoco.set_mjcb_control(controller)
     for _ in range(SIM_STEPS):
         mujoco.mj_step(model, data)
     mujoco.set_mjcb_control(None)
-    fit = fitness() if len(HISTORY) > 1 else 0.0
+    fit = fitness(history) if len(history) > 1 else 0.0
     if render:
-        show_qpos_history(HISTORY, fit)
+        show_qpos_history(history, fit)
     if show_gui:
         show_in_gui(weights,nn_model)
     return fit
@@ -294,10 +297,11 @@ def record_episode(weights, nn_model, fitness, filename=None, duration=30):
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
     assign_flat_weights_to_model(nn_model, weights)
+    history = []
 
     def controller(m, d):
         # torch_nn_controller(m, d, to_track, weights, input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
-        torch_nn_controller(nn_model, d, to_track)
+        torch_nn_controller(nn_model, d, to_track, history)
 
     # Non-default VideoRecorder options
     PATH_TO_VIDEO_FOLDER = "./output/videos"
@@ -325,28 +329,23 @@ def main():
     input_size = len(data.qpos)
     hidden_size = HIDDEN_SIZE
     output_size = model.nu
-    # Calculate total weights for configurable layers (weights + biases)
-    layer_sizes = [input_size] + [hidden_size] * NUM_HIDDEN_LAYERS + [output_size]
-    weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
-    bias_shapes = [(layer_sizes[i + 1],) for i in range(len(layer_sizes) - 1)]
-    total_weights = sum(a * b + b for a, b in weight_shapes)  # weights + biases for each layer
-
+    
     nn_model = create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+
+    total_weights = sum(p.numel() for p in nn_model.parameters())
 
     # based on https://docs.evotorch.ai/v0.4.0/quickstart/#problem-definition
 
     def evo_fitness(weights):
         # weights kan een (ReadOnly) torch.Tensor op cuda zijn
         if isinstance(weights, torch.Tensor):
-            w = weights.numpy()
-            # w = weights.detach().cpu().numpy()
+            w = weights.detach().cpu().numpy()
         else:
             w = np.asarray(weights, dtype=np.float32)
         return run_episode(w, nn_model)
 
-    cores = multiprocessing.cpu_count() -1
-    print(f"Running on {cores} cores")
-    problem = Problem("max", evo_fitness, solution_length=total_weights, initial_bounds=(-1.0, 1.0), device=DEVICE, num_actors=cores)
+    print(f"Running on {PARALLEL_CORES} cores")
+    problem = Problem("max", evo_fitness, solution_length=total_weights, initial_bounds=(-1.0, 1.0), device=DEVICE, num_actors=PARALLEL_CORES)
 
     searcher = SNES(problem, popsize=POP_SIZE, stdev_init=0.025)
     # searcher = Cosyne(problem, popsize=POP_SIZE, tournament_size=6, mutation_stdev=0.1)
@@ -355,8 +354,8 @@ def main():
 
     generations = MAX_GENERATIONS
     gen = 0
-    while gen < generations and (time.time() - begin_time) < TIME_LIMIT:
-        for _ in range(BATCH_SIZE):  # Run multiple generations between each display
+    while gen < generations and (TIME_LIMIT < 0 or (time.time() - begin_time) < TIME_LIMIT):
+        for _ in range(min(BATCH_SIZE, generations - gen)):  # Run multiple generations between each display
             gen_start = time.time()
             searcher.step()
             gen_end = time.time()
@@ -373,15 +372,16 @@ def main():
             if cont != 'y':
                 print("Stopping evolution.")
                 break
-    input("Best weights found, run final episode with rendering and GUI... (press Enter to continue)")
 
-    final_fit = run_episode(np.array(best_weights), nn_model, render=True)
-    save_genotype(best_weights, final_fit)
-    show_in_gui(np.array(best_weights), nn_model)
-    print("Final fitness:", final_fit)
+    save_genotype(best_weights, searcher.status['best_eval'])
+    if INTERACTIVE_MODE:
+        input("Best weights found, run final episode with rendering and GUI... (press Enter to continue)")
+        show_in_gui(np.array(best_weights), nn_model)
+        run_episode(np.array(best_weights), nn_model, render=True)
+    print("Final fitness:", searcher.status['best_eval'])
     print("mean fitness of last population:", searcher.status['mean_eval'])
     if RECORD_LAST:
-        record_episode(np.array(best_weights), nn_model, final_fit)
+        record_episode(np.array(best_weights), nn_model, searcher.status['best_eval'])
 
 
 if __name__ == "__main__":
@@ -409,3 +409,18 @@ if __name__ == "__main__":
 #     nn_model = create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
 #     begin_time = time.time()
 #     load_and_rerun_genotype('..\\output\\best_genotype_simple_0.5314192305458384_20250919-193813.npz', nn_model, record=False)
+
+
+
+# run it with both fitness modes to compare, 2 and 3 hidden layers, 8 and 16 hidden size
+# if __name__ == "__main__":
+#     for attempt in [1, 2]:
+#         for h_layers in [2, 3]:
+#             NUM_HIDDEN_LAYERS = h_layers
+#             for fitness_mode in ["simple", "segment_median"]:
+#                 FITNESS_MODE = fitness_mode
+#                 print(f"Starting run {attempt} with mode={FITNESS_MODE}, hidden_layers={NUM_HIDDEN_LAYERS}")
+#                 begin_time = time.time()
+#                 main()
+#                 end_time = time.time()
+#                 print(f"Total execution time: {end_time - begin_time:.2f} seconds")
