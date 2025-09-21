@@ -32,7 +32,7 @@ HISTORY = []
 
 # === Experiment Constants ===
 SEGMENT_LENGTH = 100
-POP_SIZE = 50
+POP_SIZE = 150
 MAX_GENERATIONS = 15000
 TIME_LIMIT = 3600  # in seconds
 HIDDEN_SIZE = 16
@@ -368,7 +368,7 @@ def main():
 
         if INTERACTIVE_MODE:
             print("Showing best solution in MuJoCo GUI...")
-            show_in_gui(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+            show_in_gui(np.array(best_weights), nn_model)
             cont = input("Continue for another batch of generations? (y/n): ").strip().lower()
             if cont != 'y':
                 print("Stopping evolution.")
@@ -377,7 +377,7 @@ def main():
 
     final_fit = run_episode(np.array(best_weights), nn_model, render=True)
     save_genotype(best_weights, final_fit)
-    show_in_gui(np.array(best_weights), input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
+    show_in_gui(np.array(best_weights), nn_model)
     print("Final fitness:", final_fit)
     print("mean fitness of last population:", searcher.status['mean_eval'])
     if RECORD_LAST:
