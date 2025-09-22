@@ -36,7 +36,7 @@ TIME_LIMIT = 60 * 60  # in seconds
 HIDDEN_SIZE = 16
 SIM_STEPS = 2500
 OUTPUT_DELTA = 0.05
-NUM_HIDDEN_LAYERS = 3
+NUM_HIDDEN_LAYERS = 1
 FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 RECORD_LAST = True
@@ -212,6 +212,8 @@ def create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS) -> 
             layers.append(nn.Tanh())
             self.network = nn.Sequential(*layers)
         def forward(self, x):
+            # Ensure input is on the same device as the model
+            x = x.to(next(self.parameters()).device)
             return self.network(x)
     return NeuralNetwork(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS).to(torch_device)
 
@@ -261,8 +263,9 @@ def run_episode(weights, nn_model, render=False, show_gui=False):
     to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
 
 
-    #  assign weights once per episode    
-    assign_flat_weights_to_model(nn_model, weights)
+    # Assign weights only if provided (for non-NEProblem usage)
+    if weights is not None:
+        assign_flat_weights_to_model(nn_model, weights)
 
     def controller(m, d):
         torch_nn_controller(nn_model, d, to_track, history)
@@ -330,58 +333,79 @@ def main():
     hidden_size = HIDDEN_SIZE
     output_size = model.nu
     
-    nn_model = create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
 
-    total_weights = sum(p.numel() for p in nn_model.parameters())
+    from evotorch.neuroevolution import NEProblem
 
-    # based on https://docs.evotorch.ai/v0.4.0/quickstart/#problem-definition
+    def network_factory():
+        return create_nn_model(input_size, hidden_size, output_size, NUM_HIDDEN_LAYERS)
 
-    def evo_fitness(weights):
-        # weights kan een (ReadOnly) torch.Tensor op cuda zijn
-        if isinstance(weights, torch.Tensor):
-            w = weights.detach().cpu().numpy()
-        else:
-            w = np.asarray(weights, dtype=np.float32)
-        return run_episode(w, nn_model)
+    def evaluate_network(nn_model):
+        # NEProblem will set weights automatically
+        return run_episode(None, nn_model)
 
     print(f"Running on {PARALLEL_CORES} cores")
-    problem = Problem("max", evo_fitness, solution_length=total_weights, initial_bounds=(-1.0, 1.0), device=DEVICE, num_actors=PARALLEL_CORES)
+    problem = NEProblem(
+        objective_sense="max",
+        network=network_factory,
+        network_eval_func=evaluate_network,
+        initial_bounds=(-1.0, 1.0),
+        device=DEVICE,
+        num_actors=PARALLEL_CORES
+    )
 
     searcher = SNES(problem, popsize=POP_SIZE, stdev_init=0.025)
-    # searcher = Cosyne(problem, popsize=POP_SIZE, tournament_size=6, mutation_stdev=0.1)
     logger = evotorch.logging.StdOutLogger(searcher)
-
 
     generations = MAX_GENERATIONS
     gen = 0
     while gen < generations and (TIME_LIMIT < 0 or (time.time() - begin_time) < TIME_LIMIT):
-        for _ in range(min(BATCH_SIZE, generations - gen)):  # Run multiple generations between each display
+        for _ in range(min(BATCH_SIZE, generations - gen)):
             gen_start = time.time()
             searcher.step()
             gen_end = time.time()
             print(f"Time for generation: {(gen_end - gen_start):.2f} seconds")
             gen += 1
         best_weights = searcher.status['best']
-        best_fit = run_episode(np.array(best_weights), nn_model, render=True)
+        # Use NEProblem to instantiate the best network
+        best_nn_model = problem.make_net(best_weights)
+        best_fit = run_episode(None, best_nn_model, render=True)
         print("Current best fitness:", best_fit)
 
         if INTERACTIVE_MODE:
             print("Showing best solution in MuJoCo GUI...")
-            show_in_gui(np.array(best_weights), nn_model)
+            show_in_gui(best_weights, best_nn_model)
             cont = input("Continue for another batch of generations? (y/n): ").strip().lower()
             if cont != 'y':
                 print("Stopping evolution.")
                 break
 
+    # Save best genotype weights and fitness
     save_genotype(best_weights, searcher.status['best_eval'])
+
+    # Example: Load and re-evaluate saved genotype
+    def load_and_evaluate_genotype(filename, problem):
+        data = np.load(filename)
+        weights = data['weights']
+        fitness_val = data['fitness']
+        print(f"Loaded genotype from {filename} with fitness {fitness_val}")
+        nn_model = problem.make_net(weights)
+        fit = run_episode(None, nn_model, render=True, show_gui=True)
+        print(f"Re-evaluated fitness: {fit}")
+        return fit
+
     if INTERACTIVE_MODE:
         input("Best weights found, run final episode with rendering and GUI... (press Enter to continue)")
-        show_in_gui(np.array(best_weights), nn_model)
-        run_episode(np.array(best_weights), nn_model, render=True)
+        show_in_gui(best_weights, best_nn_model)
+        run_episode(None, best_nn_model, render=True)
+
     print("Final fitness:", searcher.status['best_eval'])
     print("mean fitness of last population:", searcher.status['mean_eval'])
+
     if RECORD_LAST:
-        record_episode(np.array(best_weights), nn_model, searcher.status['best_eval'])
+        record_episode(best_weights, best_nn_model, searcher.status['best_eval'])
+
+    # Example usage: Uncomment to test loading and re-evaluating
+    # load_and_evaluate_genotype('output/best_genotype_simple_0.5314192305458384_20250919-193813.npz', problem)
 
 
 if __name__ == "__main__":

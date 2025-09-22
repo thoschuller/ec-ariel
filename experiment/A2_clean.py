@@ -38,17 +38,17 @@ MAX_GENERATIONS = 15000
 TIME_LIMIT = 60 * 60 * 1  # max run time in seconds
 HIDDEN_SIZE = 16
 SIM_STEPS = 2500  # running at 500 steps per second
-# OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
-NUM_HIDDEN_LAYERS = 3
+OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
+NUM_HIDDEN_LAYERS = 2
 FITNESS_MODE = "segment_median"  # Options: "segment_median", "simple"
-INTERACTIVE_MODE = True  # If True, show and ask every X generations; if False, run to max
+INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
-BATCH_SIZE = 20  # Number of individuals to evaluate before running interactive prompts
+BATCH_SIZE = 10  # Number of individuals to evaluate before running interactive prompts
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
 RECORD_LAST = True  # If True, record a video of the last individual
 SEEDING_ATTEMPTS = 3  # Number of attempts to seed the initial population
-SEEDING_GENERATIONS = 4  # Number of generations to run for seeding
+SEEDING_GENERATIONS = 2  # Number of generations to run for seeding
 
 # # Staged evolution settings
 # STAGED_EVOLUTION = False  # If True, use staged evolution
@@ -60,12 +60,30 @@ SEEDING_GENERATIONS = 4  # Number of generations to run for seeding
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
-PARALLEL_CORES = multiprocessing.cpu_count() - 1  # leave one core free for the system itself
+PARALLEL_CORES = 1 if DEVICE == "cuda" else multiprocessing.cpu_count() - 1  # leave one core free for the system itself
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
-# Per-process cache to avoid recompiling the world/model on every evaluation
-_MODEL_CACHE: dict = {}
+def numpy_nn_controller_move_with_weights(model, data, to_track, weights, input_size, hidden_size, output_size, history) -> None:
+    def sigmoid(x):
+        return 1.0 / (1.0 + np.exp(-x))
+
+    # Dynamically unpack weights for multiple hidden layers
+    layer_sizes = [input_size] + [hidden_size] * NUM_HIDDEN_LAYERS + [output_size]
+    weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
+    weight_sizes = [a * b for a, b in weight_shapes]
+    indices = np.cumsum([0] + weight_sizes)
+    ws = [weights[indices[i]:indices[i + 1]].reshape(weight_shapes[i]) for i in range(len(weight_shapes))]
+    # Forward pass
+    inputs = data.qpos
+    x = inputs
+    for i in range(NUM_HIDDEN_LAYERS):
+        x = sigmoid(np.dot(x, ws[i]))
+    outputs = sigmoid(np.dot(x, ws[-1])) - 0.5  # Center around 0
+    data.ctrl += outputs * OUTPUT_DELTA
+    data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2)
+    history.append(to_track[0].xpos.copy())
+
 
 def neuralnet_move(model: mujoco.MjModel, data: mujoco.MjData, to_track: list, nn_model: torch.nn.Module, history: list) -> None:
     # Get inputs, in this case the positions of the actuator motors (hinges)
@@ -137,11 +155,7 @@ def run_bot_session(network: torch.nn.Module, method: str, options: dict = None)
         video_path.mkdir(exist_ok=True)
         video_file = ""
         if options:
-            video_file += f"mode {options.get('mode','unknown')}_fit {options.get('fitness',0.0):.4f}"
-            if options.get('filename'):
-                video_file = f"{options.get('filename')}"
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        video_file += f"_{timestamp}.mp4"
+            video_file += f"{options.get('filename','recording')} mode {options.get('mode','unknown')}_fit {options.get('fitness',0.0):.4f}"
         video_recorder = VideoRecorder(output_folder=video_path, file_name=video_file, width=1200, height=960, fps=30)
         video_renderer(
             model,
@@ -336,9 +350,11 @@ def evolve():
             gen_end_time = time.time()
             print(f"Generation {generation}, Best Fitness: {searcher.status['best_eval']:.5f}, Time: {gen_end_time - gen_start_time:.5f} seconds")
             
+        
+        best_individual: Solution = searcher.status['best']
+        best_net = problem.parameterize_net(best_individual)
+
         if interactive_mode:
-            best_individual: Solution = searcher.status['best']
-            best_net = problem.parameterize_net(best_individual)
             history = run_bot_session(best_net, method="headless")
             run_bot_session(best_net, method="viewer")
             show_qpos_history(history)
@@ -353,7 +369,7 @@ def evolve():
         else:
             print("Running in non-interactive mode, continuing evolution.")
         if RECORD_BATCH:
-            run_bot_session(best_net, method="headless", options={"filename": "auto_recording"})
+            run_bot_session(best_net, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": searcher.status['best_eval']})
 
 
     best_individual: Solution = searcher.status['best']
@@ -362,7 +378,7 @@ def evolve():
 
     if RECORD_LAST:
         print("Recording final best individual...")
-        run_bot_session(best_individual, method="record", options={"mode": FITNESS_MODE, "fitness": best_fit})
+        run_bot_session(best_individual, method="record", options={"mode": FITNESS_MODE, "fitness": best_fit, "filename": "final_best"})
     
     if INTERACTIVE_MODE:
         print("Showing final best individual in viewer...")
@@ -374,7 +390,13 @@ def evolve():
     return best_net, best_fit
 
 
-
+def save_genotype(net: torch.nn.Module, fitness: float) -> None:
+    output_path = Path(__file__).parent / "output" / "genotypes"
+    output_path.mkdir(exist_ok=True)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = output_path / f"genotype_{FITNESS_MODE}_fit {fitness:.4f}_{timestamp}.pt"
+    torch.save(net.state_dict(), filename)
+    print(f"Saved best genotype to {filename}")
 
 
 def main():
@@ -382,14 +404,24 @@ def main():
     print(f"Evolution complete. Best fitness: {best_fit:.5f}")
 
 def try_multiple():
-    for evo in range(3):
+    for step_count in [5000, 10000, 20000]:
+        global SIM_STEPS
+        SIM_STEPS = step_count
+        print(f"=== Running experiments with SIM_STEPS = {SIM_STEPS} ===")
         for mode in ["simple", "segment_median"]:
             global FITNESS_MODE
             FITNESS_MODE = mode
-            print(f"=== Evolution run {evo+1} with FITNESS_MODE = {FITNESS_MODE} ===")
-            main()
+            print(f"=== Evolution run with FITNESS_MODE = {FITNESS_MODE} ===")
+            best_net, best_fit = evolve()
+            try:
+                save_genotype(best_net, best_fit)
+            except Exception as e:
+                print(f"Error saving genotype: {e}")
+            print(f"Run complete. Best fitness: {best_fit:.5f}")
+
     
     
 
 if __name__ == "__main__":
-    main()
+    # main()
+    try_multiple()

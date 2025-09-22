@@ -33,21 +33,26 @@ from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 # === experiment constants/settings ===
 SEGMENT_LENGTH = 250
 POP_SIZE = 50
-MAX_GENERATIONS = 5000
-TIME_LIMIT = 60 * 60 * 0.5  # max run time in seconds
+MAX_GENERATIONS = 15000
+TIME_LIMIT = 60 * 6  # max run time in seconds
 HIDDEN_SIZE = 8
-SIM_STEPS = 7500  # running at 500 steps per second
+SIM_STEPS = 5000  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
 NUM_HIDDEN_LAYERS = 1
-FITNESS_MODE = "segment_median"  # Options: "segment_median", "simple"
+FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
+
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
+PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
 BATCH_SIZE = 20  # Number of individuals to evaluate before running interactive prompts
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
 RECORD_LAST = True  # If True, record a video of the last individual
-SEEDING_ATTEMPTS = 2  # Number of attempts to seed the initial population
-SEEDING_GENERATIONS = 10  # Number of generations to run for seeding
+
+SEEDING_ATTEMPTS = 1  # Number of attempts to seed the initial population
+SEEDING_GENERATIONS = 1  # Number of generations to run for seeding
+UPRIGHT_FACTOR = 0  # Set to 0 to ignore vertical orientation
+ALGORITHM = "Cosyne" # Options: "SNES", "Cosyne", "Custom" NOTE: custom requires operators to be defined
 
 # # Staged evolution settings
 # STAGED_EVOLUTION = False  # If True, use staged evolution
@@ -59,14 +64,26 @@ SEEDING_GENERATIONS = 10  # Number of generations to run for seeding
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
-PARALLEL_CORES = 1 if DEVICE == "cuda" else multiprocessing.cpu_count() - 1  # leave one core free for the system itself
+PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count() - 1  # leave one core free for the system itself
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
-def numpy_nn_controller_move_with_weights(model, data, to_track, net: torch.nn.Module, input_size, hidden_size, output_size, history) -> None:
-    # `weights` is expected to be a flat numpy array of parameters (float)
-    def sigmoid(x):
+def sigmoid(x):
         return 1.0 / (1.0 + np.exp(-x))
+
+def random_controller_move(model, data: mujoco.MjData, to_track, net: torch.nn.Module, input_size, hidden_size, output_size, history: dict) -> None:
+    num_joints = model.nu 
+    hinge_range = np.pi/2
+    rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
+    delta = 0.05
+    data.ctrl += rand_moves * delta 
+    data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
+    history['xpos'].append(to_track[0].xpos.copy())
+    history['xmat'].append(to_track[0].xmat.copy())
+
+
+def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, net: torch.nn.Module, input_size, hidden_size, output_size, history: dict) -> None:
+    # `weights` is expected to be a flat numpy array of parameters (float)
 
     weights: floating[np.ndarray] = net if isinstance(net, np.ndarray) else np.array(net)
 
@@ -85,7 +102,8 @@ def numpy_nn_controller_move_with_weights(model, data, to_track, net: torch.nn.M
     outputs = sigmoid(np.dot(x, ws[-1])) - 0.5  # Center around 0
     data.ctrl += outputs * OUTPUT_DELTA
     data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2)
-    history.append(to_track[0].xpos.copy())
+    history['xpos'].append(to_track[0].xpos.copy())
+    history['xmat'].append(to_track[0].xmat.copy())
 
 def initialize_world_and_robot() -> Any:
     mujoco.set_mjcb_control(None)
@@ -105,7 +123,7 @@ def initialize_world_and_robot() -> Any:
     # Generate the model and data
     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE
     model = world.spec.compile()
-    data = mujoco.MjData(model) # type: ignore
+    data = mujoco.MjData(model)
 
     # Initialise data tracking
     # to_track is automatically updated every time step
@@ -138,7 +156,7 @@ def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> 
     model, data, to_track = initialize_world_and_robot()
 
     # Initialise history tracking
-    history = []
+    history = {'xpos': [], 'xmat': []}
     
     mujoco.set_mjcb_control(lambda m, d: numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, HIDDEN_SIZE, model.nu, history))
 
@@ -168,25 +186,59 @@ def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> 
 
     return history
 
-def calc_origin_distance(history: list) -> float:
-    start = np.array(history[0][:2])
-    end = np.array(history[-1][:2])
+def calc_origin_distance(history: dict) -> float:
+    start = np.array(history['xpos'][0][:2])
+    end = np.array(history['xpos'][-1][:2])
     return np.linalg.norm(end - start)
 
-def calc_median_segment_distance(history: list) -> float:
-    segment_fits = []
-    for i in range(0, len(history), SEGMENT_LENGTH):
-        segment = history[i:i + SEGMENT_LENGTH]
+def calc_median_segment_distance(history: dict) -> float:
+    # Project each segment displacement onto the global displacement direction
+    # so we only reward movement in the same direction as the overall travel.
+    # This prevents backward or sideways movement from increasing the score.
+    if len(history['xpos']) < 2:
+        return 0.0
+
+    total_start = np.array(history['xpos'][0][:2])
+    total_end = np.array(history['xpos'][-1][:2])
+    total_disp = total_end - total_start
+    total_norm = np.linalg.norm(total_disp)
+    if total_norm == 0:
+        return 0.0
+    total_dir = total_disp / total_norm
+
+    projected_segment_fits = []
+    for i in range(0, len(history['xpos']), SEGMENT_LENGTH):
+        segment = history['xpos'][i:i + SEGMENT_LENGTH]
         if len(segment) < SEGMENT_LENGTH:
             continue
-        start_pos = segment[0][:2]
-        end_pos = segment[-1][:2]
-        segment_fit = np.linalg.norm(end_pos - start_pos)
-        segment_fits.append(segment_fit)
-    median_segment_fit = np.median(segment_fits) if segment_fits else 0.0
+        start_pos = np.array(segment[0][:2])
+        end_pos = np.array(segment[-1][:2])
+        seg_disp = end_pos - start_pos
+        # projection scalar of segment displacement onto total direction
+        proj = float(np.dot(seg_disp, total_dir))
+        # do not punish negative projections; clip to zero so only forward
+        # movement increases the score
+        projected_segment_fits.append(max(proj, 0.0))
+
+    median_segment_fit = np.median(projected_segment_fits) if projected_segment_fits else 0.0
     return median_segment_fit
 
-def fitness(history: list) -> float:
+def calc_upright_score(history: dict) -> float:
+
+    upright_scores = []
+    for xmat in history['xmat']:
+        rot_mat = np.array(xmat).reshape(3, 3)
+        up_vector = rot_mat[:, 2]
+        upright_score = np.dot(up_vector, np.array([0, 0, 1]))
+        # must return a value  in [-0.5, 0.5]
+        upright_score = (upright_score + 1.0) / 2.0 - 0.5
+        upright_scores.append(upright_score)
+
+
+    average_upright_score = np.mean(upright_scores) if upright_scores else 0.0
+    return average_upright_score
+
+def fitness(history: dict) -> float:
     segment_count = SIM_STEPS // SEGMENT_LENGTH
 
     # calculate distance from origin
@@ -201,9 +253,13 @@ def fitness(history: list) -> float:
 
         # combine with origin distance to promote outward movement
         fit = (normalized_origin_distance + median_segment_fit) / 2
-
     else:
         raise ValueError(f"Unknown FITNESS_MODE: {FITNESS_MODE}")
+
+    # include upright score
+    if  UPRIGHT_FACTOR > 0:
+        upright_score = calc_upright_score(history)
+        fit = fit * (1.0 + (upright_score) * UPRIGHT_FACTOR)
     return fit
 
 def evaluate_network(net: torch.nn.Module) -> float:
@@ -213,13 +269,13 @@ def evaluate_network(net: torch.nn.Module) -> float:
     fit = fitness(history)
     return fit
 
-def show_qpos_history(history: list) -> None:
+def show_qpos_history(history: dict) -> None:
     fit = fitness(history)
     origin_distance = calc_origin_distance(history)
     median_segment_distance = calc_median_segment_distance(history)
 
     # Convert list of [x,y,z] positions to numpy array
-    pos_data = np.array(history)
+    pos_data = np.array(history['xpos'])
     
     # Create figure and axis
     plt.figure(figsize=(10, 6))
@@ -281,16 +337,35 @@ def evolve():
         num_actors=PARALLEL_CORES,
     )
 
+    operators = []
 
     def get_searcher() -> SearchAlgorithm:
-        return SNES(
-            problem=problem,
-            popsize=POP_SIZE,
-            stdev_init=0.1,
-            # re_evaluate=False,
-            # elitist=ELITIST,
-        )
+        match ALGORITHM:
+            case "Custom":
         
+                return GeneticAlgorithm(
+                    problem=problem,
+                    popsize=POP_SIZE,
+                    elitist=True,
+                    re_evaluate=False,
+                    operators=[]
+                )
+            case "SNES":
+                return SNES(
+                    problem=problem,
+                    popsize=POP_SIZE,
+                    stdev_init=0.3,
+                    # re_evaluate=False,
+                    # elitist=ELITIST,
+                )
+            case "Cosyne":
+                return evotorch.algorithms.Cosyne(
+                    problem=problem,
+                    popsize=POP_SIZE,
+                    tournament_size=5,
+                    mutation_stdev=0.3,
+                )
+
     
     # run a few generations to get a good initial population
     best_evolution: tuple[SearchAlgorithm, float] = None
@@ -384,33 +459,20 @@ def save_genotype(net: torch.nn.Module, fitness: float) -> None:
     torch.save(net.state_dict(), filename)
     print(f"Saved best genotype to {filename}")
 
-
 def main():
     _, best_fit = evolve()
     print(f"Evolution complete. Best fitness: {best_fit:.5f}")
 
 def try_multiple():
-    for hidden_layers in [1, 2, 3]:
-        global NUM_HIDDEN_LAYERS
-        NUM_HIDDEN_LAYERS = hidden_layers
-        for hidden_size in [8,16]:
-            global HIDDEN_SIZE
-            HIDDEN_SIZE = hidden_size
-        print(f"=== Running experiments with NUM_HIDDEN_LAYERS = {NUM_HIDDEN_LAYERS} ===")
-        for mode in ["segment_median", "simple"]:
-            try:
-                global FITNESS_MODE
-                FITNESS_MODE = mode
-                print(f"=== Evolution run with FITNESS_MODE = {FITNESS_MODE} ===")
-                best_net, best_fit = evolve()
-                save_genotype(best_net, best_fit)
-                print(f"Run complete. Best fitness: {best_fit:.5f}")
-            except Exception as e:
-                print(f"Error during evolution: {e}")
-
-    
+    for algorithm in ["Cosyne", "SNES"]:
+        global ALGORITHM
+        ALGORITHM = algorithm
+        try:
+            best_net, best_fit = evolve()
+            print(f"Run complete. Best fitness: {best_fit:.5f}")
+        except Exception as e:
+            print(f"Error during evolution: {e}")    
     
 
 if __name__ == "__main__":
-    # main()
-    try_multiple()
+    main()
