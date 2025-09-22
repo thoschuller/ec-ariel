@@ -33,12 +33,12 @@ from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 # === experiment constants/settings ===
 SEGMENT_LENGTH = 250
 POP_SIZE = 50
-MAX_GENERATIONS = 15000
+MAX_GENERATIONS = 5000
 TIME_LIMIT = 60 * 60 * 0.5  # max run time in seconds
-HIDDEN_SIZE = 16
+HIDDEN_SIZE = 8
 SIM_STEPS = 7500  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
-NUM_HIDDEN_LAYERS = 2
+NUM_HIDDEN_LAYERS = 1
 FITNESS_MODE = "segment_median"  # Options: "segment_median", "simple"
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
@@ -46,7 +46,7 @@ RECORD_LAST = True  # If True, record a video of the last individual
 BATCH_SIZE = 20  # Number of individuals to evaluate before running interactive prompts
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
 RECORD_LAST = True  # If True, record a video of the last individual
-SEEDING_ATTEMPTS = 4  # Number of attempts to seed the initial population
+SEEDING_ATTEMPTS = 2  # Number of attempts to seed the initial population
 SEEDING_GENERATIONS = 10  # Number of generations to run for seeding
 
 # # Staged evolution settings
@@ -149,6 +149,7 @@ def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> 
         video_file = ""
         if options:
             video_file += f"{options.get('filename','recording')} mode {options.get('mode','unknown')}_fit {options.get('fitness',0.0):.4f}"
+
         video_recorder = VideoRecorder(output_folder=video_path, file_name=video_file, width=1200, height=960, fps=30)
         video_renderer(
             model,
@@ -389,10 +390,10 @@ def main():
     print(f"Evolution complete. Best fitness: {best_fit:.5f}")
 
 def try_multiple():
-    for hidden_layers in [1, 2]:
+    for hidden_layers in [1, 2, 3]:
         global NUM_HIDDEN_LAYERS
         NUM_HIDDEN_LAYERS = hidden_layers
-        for hidden_size in [16, 32, 8]:
+        for hidden_size in [8,16]:
             global HIDDEN_SIZE
             HIDDEN_SIZE = hidden_size
         print(f"=== Running experiments with NUM_HIDDEN_LAYERS = {NUM_HIDDEN_LAYERS} ===")
