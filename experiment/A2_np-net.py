@@ -1,4 +1,5 @@
 # Third-party libraries
+import contextlib
 from typing import Any
 
 import numpy as np
@@ -24,6 +25,8 @@ from ariel.utils.renderers import tracking_video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.simulation.environments.rugged_heightmap import RuggedTerrainWorld
+from ariel.simulation.environments.simple_tilted_world import TiltedFlatWorld
+from ariel.simulation.environments.boxy_heightmap import BoxyRugged
 import ariel.ec as ec
 from ariel.ec.a000 import IntegerMutator
 from ariel.ec.a001 import Individual
@@ -36,11 +39,11 @@ import random
 
 
 # === experiment constants/settings ===
-SIM_WORLD = SimpleFlatWorld
+SIM_WORLD = BoxyRugged
 SEGMENT_LENGTH = 250
 POP_SIZE = 50
 MAX_GENERATIONS = 250
-TIME_LIMIT = 60 * 60 * 10000  # max run time in seconds
+TIME_LIMIT = 60 * 45  # max run time in seconds
 HIDDEN_SIZE = 8
 SIM_STEPS = 7500  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
@@ -51,7 +54,7 @@ INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False,
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
-BATCH_SIZE = 50
+BATCH_SIZE = 25
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
 DETAILED_LOGGING = True  # If True, log detailed fitness components each generation
 
@@ -136,8 +139,8 @@ def initialize_world_and_robot() -> Any:
 
     # Spawn robot in the world
     # Check docstring for spawn conditions
-    if SIM_WORLD == RuggedTerrainWorld:
-        spawn_pos = [0, 0, 0.25]
+    if SIM_WORLD != SimpleFlatWorld:
+        spawn_pos = [0, 0, 1]
     else:
         spawn_pos = [0, 0, 0]
 
@@ -711,18 +714,22 @@ def evolve_using_ariel_ec():
                         progress.update(outer_loop, completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None, description=f"Evolution Progress - current best {ea.get_solution('best', only_alive=False).fitness:.5f}")
                 best_individual: Individual = ea.get_solution('best', only_alive=False)
                 best_weights = np.array(best_individual.genotype, dtype=np.float32)
-
+                if RECORD_BATCH or interactive_mode:
+                    best_history = run_bot_session(best_weights, method="headless")
+                if RECORD_BATCH:
+                    run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": best_individual.fitness})
+                    save_genotype(best_weights, best_individual.fitness)
+                    show_qpos_history(best_history)
                 if interactive_mode:
                     progress.stop()
                     console.rule(f"Generation {gen} - Best Fitness: {best_individual.fitness:.5f}")
                     console.log("Running best individual in viewer...")
                     console.log(f"Current runtime: {(time.time() - evolution_start_time)/60:.2f} minutes")
 
-                    history = run_bot_session(best_weights, method="headless")
-                    show_qpos_history(history)
-                    console.log(f"total distance walked: {calc_origin_distance(history):.2f}")
-                    console.log(f"total forward distance: {calc_forward_distance(history):.2f}")
-                    console.log(f"total lateral distance: {calc_lateral_distance(history):.2f}")
+                    show_qpos_history(best_history)
+                    console.log(f"total distance walked: {calc_origin_distance(best_history):.2f}")
+                    console.log(f"total forward distance: {calc_forward_distance(best_history):.2f}")
+                    console.log(f"total lateral distance: {calc_lateral_distance(best_history):.2f}")
 
                     console.log(f"Make sure to close the viewer window to continue evolution.")
 
@@ -741,9 +748,6 @@ def evolve_using_ariel_ec():
                         progress.start()
                 else:
                     pass
-                if RECORD_BATCH:
-                    run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": best_individual.fitness})
-                    save_genotype(best_weights, best_individual.fitness)
                 if terminate():
                     break
                 progress.update(outer_loop, description=f"Evolution Progress - current best {best_individual.fitness:.5f}", completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None)
@@ -823,5 +827,41 @@ def test_loaded_genotype(file_path: str) -> None:
 def main():
     ea: EA = evolve_using_ariel_ec()
 
+def run_multiple():
+    # log all prints and console outputs to a file AND terminal
+    log_path = Path(__file__).parent / "output" / "logs"
+    log_path.mkdir(exist_ok=True)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    log_file = log_path / f"evolution_log_{timestamp}.txt"
+
+    class Tee:
+        def __init__(self, *files):
+            self.files = files
+        def write(self, obj):
+            for f in self.files:
+                f.write(obj)
+                f.flush()
+        def flush(self):
+            for f in self.files:
+                f.flush()
+
+    import sys
+    with open(log_file, "w") as f:
+        tee_out = Tee(sys.stdout, f)
+        tee_err = Tee(sys.stderr, f)
+        with contextlib.redirect_stdout(tee_out), contextlib.redirect_stderr(tee_err):
+            console.log(f"Logging to {log_file}")
+            runs = 3
+            worlds = [SimpleFlatWorld, BoxyRugged, RuggedTerrainWorld]
+            for world in worlds:
+                console.log(f"Running world: {world.__name__}")
+                global SIM_WORLD
+                SIM_WORLD = world
+                for i in range(runs):
+                    console.rule(f"[red] Starting run {i+1} of {runs} ")
+                    ea = evolve_using_ariel_ec()
+                    console.rule(f"[red] Completed run {i+1} of {runs} ")
+                    time.sleep(5)  # brief pause between runs
+
 if __name__ == "__main__":
-    main()
+    run_multiple
