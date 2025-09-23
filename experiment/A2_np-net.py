@@ -48,7 +48,6 @@ NUM_HIDDEN_LAYERS = 1
 FITNESS_MODE = "lateral_adjusted"  # Options: "segment_median", "simple", "modern", "lateral_adjusted", "lateral_median"
 
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
-# NOTE: keep PARALLEL disabled for now, seems to cause an interaction bug with mujoco
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
