@@ -15,77 +15,96 @@ from pathlib import Path
 import multiprocessing
 from evotorch.neuroevolution import NEProblem
 import evotorch.neuroevolution.net
-
 # if you get errors here, you may need to install torch and torchvision
 # uv pip install torch torchvision --torch-backend=auto
 from numpy import floating
 import torch
+from rich.console import Console
+from rich.traceback import install
+from rich.progress import track, Progress
+import math
+
+from typing import cast, Literal
 
 # Local libraries
 from ariel.utils.renderers import video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
-
+import ariel.ec as ec
+from ariel.ec.a000 import IntegerMutator
+from ariel.ec.a001 import Individual
+from ariel.ec.a005 import Crossover
+from ariel.ec.a004 import EASettings, EAStep, EA, Population
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
+
+import random
 
 
 # === experiment constants/settings ===
 SEGMENT_LENGTH = 250
 POP_SIZE = 50
-MAX_GENERATIONS = 15000
-TIME_LIMIT = 60 * 6  # max run time in seconds
+MAX_GENERATIONS = 40
+TIME_LIMIT = 60 * 60  # max run time in seconds
 HIDDEN_SIZE = 8
-SIM_STEPS = 5000  # running at 500 steps per second
+SIM_STEPS = 1000  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
 NUM_HIDDEN_LAYERS = 1
-FITNESS_MODE = "simple"  # Options: "segment_median", "simple"
+FITNESS_MODE = "modern"  # Options: "segment_median", "simple"
 
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
+# NOTE: keep PARALLEL disabled for now, seems to cause an interaction bug with mujoco
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
-BATCH_SIZE = 20  # Number of individuals to evaluate before running interactive prompts
+BATCH_SIZE = 10
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
-RECORD_LAST = True  # If True, record a video of the last individual
 
-SEEDING_ATTEMPTS = 1  # Number of attempts to seed the initial population
-SEEDING_GENERATIONS = 1  # Number of generations to run for seeding
+
 UPRIGHT_FACTOR = 0  # Set to 0 to ignore vertical orientation
-ALGORITHM = "Cosyne" # Options: "SNES", "Cosyne", "Custom" NOTE: custom requires operators to be defined
-
-# # Staged evolution settings
-# STAGED_EVOLUTION = False  # If True, use staged evolution
-# STAGE1_GENERATIONS = 5  # Number of generations for stage 1
-# STAGE2_GENERATIONS = 10  # Number of generations for stage 2
-# STAGE3_GENERATIONS = MAX_GENERATIONS - STAGE1_GENERATIONS - STAGE2_GENERATIONS  # Remaining generations for stage 3
-# ===========================
 
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
 PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count() - 1  # leave one core free for the system itself
 
+global SEED
+SEED = 42
+global RNG
+RNG = np.random.default_rng(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
+
+install()
+console = Console()
+
+config = EASettings()
+config.is_maximisation = True
+config.db_handling = "delete"
+
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
 def sigmoid(x):
         return 1.0 / (1.0 + np.exp(-x))
 
-def random_controller_move(model, data: mujoco.MjData, to_track, net: torch.nn.Module, input_size, hidden_size, output_size, history: dict) -> None:
-    num_joints = model.nu 
-    hinge_range = np.pi/2
-    rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
-    delta = 0.05
-    data.ctrl += rand_moves * delta 
-    data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
-    history['xpos'].append(to_track[0].xpos.copy())
-    history['xmat'].append(to_track[0].xmat.copy())
+# def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: dict) -> None:
+#     num_joints = model.nu 
+#     hinge_range = np.pi/2
+#     rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
+#     delta = 0.05
+#     data.ctrl += rand_moves * delta 
+#     data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
+#     history['xpos'].append(to_track[0].xpos.copy())
+#     history['xmat'].append(to_track[0].xmat.copy())
+
+def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
+    R = xmat_flat.reshape(3, 3)
+    return math.atan2(R[1, 0], R[0, 0])  # Z-up convention
 
 
-def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, net: torch.nn.Module, input_size, hidden_size, output_size, history: dict) -> None:
+def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
     # `weights` is expected to be a flat numpy array of parameters (float)
-
-    weights: floating[np.ndarray] = net if isinstance(net, np.ndarray) else np.array(net)
 
     # Dynamically unpack weights for multiple hidden layers
     layer_sizes = [input_size] + [hidden_size] * NUM_HIDDEN_LAYERS + [output_size]
@@ -102,8 +121,10 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, 
     outputs = sigmoid(np.dot(x, ws[-1])) - 0.5  # Center around 0
     data.ctrl += outputs * OUTPUT_DELTA
     data.ctrl = np.clip(data.ctrl, -np.pi / 2, np.pi / 2)
-    history['xpos'].append(to_track[0].xpos.copy())
-    history['xmat'].append(to_track[0].xmat.copy())
+    pos = to_track[0].xpos.copy()
+    yaw = yaw_from_xmat(to_track[0].xmat.copy())
+    history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))   
+
 
 def initialize_world_and_robot() -> Any:
     mujoco.set_mjcb_control(None)
@@ -132,31 +153,16 @@ def initialize_world_and_robot() -> Any:
 
     return model, data, to_track
 
-def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> list:
-    # Accept either a torch.nn.Module or a tensor-like object containing parameters.
-    if isinstance(net, torch.nn.Module):
-        try:
-            weights_tensor = torch.cat([p.detach().cpu().flatten() for p in net.parameters()])
-        except Exception:
-            # Fallback: if module has no parameters, try to treat it as a tensor-like object
-            weights_tensor = torch.tensor([])
-    elif isinstance(net, torch.Tensor):
-        weights_tensor = net.detach().cpu()
-    elif isinstance(net, np.ndarray):
-        weights_tensor = torch.from_numpy(net).float()
-    else:
-        # Last resort: try to convert to numpy then tensor
-        try:
-            arr = np.asarray(net)
-            weights_tensor = torch.from_numpy(arr).float()
-        except Exception:
-            raise TypeError("Unsupported network type for run_bot_session")
-
-    weights = weights_tensor.numpy().flatten()
+def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
+    np.random.seed(SEED)
+    random.seed(SEED)
+    # Clear any existing MuJoCo callbacks for process isolation
+    mujoco.set_mjcb_control(None)
+    
     model, data, to_track = initialize_world_and_robot()
 
     # Initialise history tracking
-    history = {'xpos': [], 'xmat': []}
+    history = []
     
     mujoco.set_mjcb_control(lambda m, d: numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, HIDDEN_SIZE, model.nu, history))
 
@@ -176,7 +182,7 @@ def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> 
             video_recorder=video_recorder,
         )
         mujoco.set_mjcb_control(None)
-        print(f"Recorded episode saved to {video_path}/{video_file}")
+        console.log(f"Recorded episode saved to {video_path}/{video_file}")
     elif method == "viewer":
         viewer.launch(model, data)
     elif method == "headless":
@@ -186,20 +192,17 @@ def run_bot_session(net: torch.nn.Module, method: str, options: dict = None) -> 
 
     return history
 
-def calc_origin_distance(history: dict) -> float:
-    start = np.array(history['xpos'][0][:2])
-    end = np.array(history['xpos'][-1][:2])
+def calc_origin_distance(history: list) -> float:
+    start = np.array(history[0][:2])
+    end = np.array(history[-1][:2])
     return np.linalg.norm(end - start)
 
-def calc_median_segment_distance(history: dict) -> float:
+def calc_median_segment_distance(history: list) -> float:
     # Project each segment displacement onto the global displacement direction
     # so we only reward movement in the same direction as the overall travel.
     # This prevents backward or sideways movement from increasing the score.
-    if len(history['xpos']) < 2:
-        return 0.0
-
-    total_start = np.array(history['xpos'][0][:2])
-    total_end = np.array(history['xpos'][-1][:2])
+    total_start = np.array(history[0][:2])
+    total_end = np.array(history[-1][:2])
     total_disp = total_end - total_start
     total_norm = np.linalg.norm(total_disp)
     if total_norm == 0:
@@ -207,8 +210,8 @@ def calc_median_segment_distance(history: dict) -> float:
     total_dir = total_disp / total_norm
 
     projected_segment_fits = []
-    for i in range(0, len(history['xpos']), SEGMENT_LENGTH):
-        segment = history['xpos'][i:i + SEGMENT_LENGTH]
+    for i in range(0, len(history), SEGMENT_LENGTH):
+        segment = history[i:i + SEGMENT_LENGTH]
         if len(segment) < SEGMENT_LENGTH:
             continue
         start_pos = np.array(segment[0][:2])
@@ -223,23 +226,43 @@ def calc_median_segment_distance(history: dict) -> float:
     median_segment_fit = np.median(projected_segment_fits) if projected_segment_fits else 0.0
     return median_segment_fit
 
-def calc_upright_score(history: dict) -> float:
+def fitness(history: list) -> float:
+    if FITNESS_MODE == "modern":
+        arr = np.asarray(history, dtype=np.float32)
+        x0, y0, z0, yaw0 = arr[0]
+        xT, yT, zT, yawT = arr[-1]
 
-    upright_scores = []
-    for xmat in history['xmat']:
-        rot_mat = np.array(xmat).reshape(3, 3)
-        up_vector = rot_mat[:, 2]
-        upright_score = np.dot(up_vector, np.array([0, 0, 1]))
-        # must return a value  in [-0.5, 0.5]
-        upright_score = (upright_score + 1.0) / 2.0 - 0.5
-        upright_scores.append(upright_score)
+        # forward progress along initial heading
+        dxy = np.array([xT - x0, yT - y0])
+        h0 = np.array([np.cos(yaw0), np.sin(yaw0)])
+        forward = max(0.0, float(np.dot(dxy, h0)))
+
+        # side drift
+        lateral = float(np.max(arr[:, 1]) - np.min(arr[:, 1]))
+
+        # yaw change
+        yaw_change = float(abs(np.unwrap(arr[:, 3].astype(float))[-1] -
+                            np.unwrap(arr[:, 3].astype(float))[0]))
+
+        # crouching penalty (z drop)
+        z_drop = max(0.0, float(z0 - np.min(arr[:, 2])))
+
+        # high jump penalty
+        max_height = float(np.max(arr[:, 2]))
+        height_penalty = max(0.0, max_height - 0.3)  # threshold adjustable
+
+        # combine
+        score = (
+            forward
+            - 0.2 * lateral
+            - 0.1 * yaw_change
+            - 0.5 * z_drop
+            - 0.3 * height_penalty     
+        )
+        return max(0.0, score)   # optional clamp to avoid negatives
 
 
-    average_upright_score = np.mean(upright_scores) if upright_scores else 0.0
-    return average_upright_score
-
-def fitness(history: dict) -> float:
-    segment_count = SIM_STEPS // SEGMENT_LENGTH
+    segment_count = SIM_STEPS / SEGMENT_LENGTH
 
     # calculate distance from origin
     origin_distance = calc_origin_distance(history)
@@ -255,21 +278,66 @@ def fitness(history: dict) -> float:
         fit = (normalized_origin_distance + median_segment_fit) / 2
     else:
         raise ValueError(f"Unknown FITNESS_MODE: {FITNESS_MODE}")
-
-    # include upright score
-    if  UPRIGHT_FACTOR > 0:
-        upright_score = calc_upright_score(history)
-        fit = fit * (1.0 + (upright_score) * UPRIGHT_FACTOR)
     return fit
 
-def evaluate_network(net: torch.nn.Module) -> float:
-    history = run_bot_session(net, method="headless")
-    if len(history) < 2:
-        return 0.0
+def evaluate_ind(ind: Individual) -> float:
+    # Convert genotype back to numpy array for evaluation
+    weights = np.array(ind.genotype, dtype=np.float32)
+    history = run_bot_session(weights, method="headless")
     fit = fitness(history)
     return fit
 
-def show_qpos_history(history: dict) -> None:
+def evaluate_pop(pop: Population) -> Population:
+    if PARALLEL and PARALLEL_CORES > 1:
+        # Get individuals that need evaluation
+        to_eval = [ind for ind in pop if ind.requires_eval]
+        if to_eval:            
+            # Extract genotypes for parallel evaluation (convert to lists for pickling)
+            genotypes = [ind.genotype for ind in to_eval]
+            
+            # Parallel evaluation using multiprocessing
+            with multiprocessing.Pool(processes=PARALLEL_CORES) as pool:
+                fitness_values = pool.map(evaluate_individual_isolated, genotypes)
+            
+            # Assign fitness values back to individuals
+            for ind, fitness_val in zip(to_eval, fitness_values):
+                ind.fitness = fitness_val
+                ind.requires_eval = False
+    else:
+        # Sequential evaluation (fallback)
+        for ind in pop:
+            if ind.requires_eval:
+                ind.fitness = evaluate_ind(ind)
+                ind.requires_eval = False
+    return pop
+
+
+def evaluate_individual_isolated(genotype_list: list) -> float:
+    """
+    Isolated evaluation function for multiprocessing.
+    This function ensures each process has its own MuJoCo instance and state.
+    """
+    # Clear any existing MuJoCo callbacks to ensure isolation
+    mujoco.set_mjcb_control(None)
+    
+    # Convert genotype back to numpy array
+    weights = np.array(genotype_list, dtype=np.float32)
+    
+    try:
+        # Each process gets its own fresh MuJoCo environment
+        history = run_bot_session(weights, method="headless")
+        fit = fitness(history)
+        return fit
+    except Exception as e:
+        # Return a very low fitness if evaluation fails
+        console.log(f"Evaluation failed for individual: {e}")
+        return -1000.0
+    finally:
+        # Clean up MuJoCo callbacks to prevent interference
+        mujoco.set_mjcb_control(None)
+
+
+def show_qpos_history(history: dict, save: bool = False) -> None:
     fit = fitness(history)
     origin_distance = calc_origin_distance(history)
     median_segment_distance = calc_median_segment_distance(history)
@@ -303,9 +371,110 @@ def show_qpos_history(history: dict) -> None:
     plt.draw()
     plt.pause(0.1)  # Pause to update the plot
 
+    if save:
+        output_path = Path(__file__).parent / "output" / "plots"
+        output_path.mkdir(exist_ok=True)
+        timestamp = int(time.time())
+        filename = output_path / f"trajectory_fit_{fit:.5f}_{timestamp}.png"
+        plt.savefig(filename)
+        console.log(f"Plot saved to {filename}")
 
-def evolve():
-    start_time = time.time()
+def create_individual(total_params: int) -> Individual:
+    # Create a random individual with weights in [-1, 1]
+    genotype = np.random.uniform(-1.0, 1.0, size=total_params).astype(np.float32)
+    ind = Individual()
+    ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
+    return ind
+
+
+
+def parent_selection(population: Population) -> Population:
+    """Tournament selection"""
+    safe_population = population.copy()
+
+    # Shuffle population to avoid bias
+    random.shuffle(safe_population)
+
+    # Tournament selection
+    for idx in range(0, len(safe_population) - 1, 2):
+        ind_i = safe_population[idx]
+        ind_j = safe_population[idx + 1]
+
+        # Compare fitness values and update tags
+        if ind_i.fitness > ind_j.fitness and config.is_maximisation:
+            ind_i.tags = {"ps": True}
+            ind_j.tags = {"ps": False}
+        else:
+            ind_i.tags = {"ps": False}
+            ind_j.tags = {"ps": True}
+    return population
+
+def crossover(population: Population) -> Population:
+    """One point crossover"""
+
+    parents = [ind for ind in population if ind.tags.get("ps", False)]
+    for idx in range(0, len(parents) - 1, 2):
+        parent_i = parents[idx].model_copy()
+        parent_j = parents[idx+1].model_copy()
+        genotype_i, genotype_j = Crossover.one_point(
+            cast("list[float]", parent_i.genotype),
+            cast("list[float]", parent_j.genotype),
+        )
+
+        # First child   
+        child_i = Individual()
+        child_i.genotype = genotype_i
+        child_i.tags = {"mut": True}
+        child_i.requires_eval = True
+
+        # Second child
+        child_j = Individual()
+        child_j.genotype = genotype_j
+        child_j.tags = {"mut": True}
+        child_j.requires_eval = True
+
+        population.extend([child_i, child_j])
+    return population
+
+def mutation(population: Population) -> Population:
+    for ind in population:
+        if ind.tags.get("mut", False):
+            genes = cast("list[int]", ind.genotype)
+            mutated = IntegerMutator.float_creep(
+                individual=genes,
+                span=5,
+                mutation_probability=0.5,
+            )
+            ind.genotype = mutated
+            ind.requires_eval = True
+    return population
+
+def survivor_selection(population: Population) -> Population:
+
+    # Shuffle population to avoid bias
+    random.shuffle(population)
+    current_pop_size = len(population)
+
+    for idx in range(len(population)):
+        ind_i = population[idx]
+        ind_j = population[idx + 1]
+
+        # Kill worse individual
+        if ind_i.fitness > ind_j.fitness and config.is_maximisation:
+            ind_j.alive = False
+        else:
+            ind_i.alive = False
+
+        # Termination condition
+        current_pop_size -= 1
+        if current_pop_size <= config.target_population_size:
+            break
+    return population
+
+
+def evolve_using_ariel_ec():    
+
+    console.rule("[green]Starting Evolutionary Run")
 
     # input size is the number of position sensors (qpos)
     model, data, to_track = initialize_world_and_robot()
@@ -314,165 +483,155 @@ def evolve():
     hidden_size = HIDDEN_SIZE
     num_hidden_layers = NUM_HIDDEN_LAYERS
 
-    # Create a small nn.Module template that contains a single flat parameter vector
-    class FlatParamNet(torch.nn.Module):
-        def __init__(self, total_params: int):
-            super().__init__()
-            self.flat = torch.nn.Parameter(torch.randn(total_params))
-
-        def forward(self, *args, **kwargs):
-            raise NotImplementedError("FlatParamNet is used only as a parameter container")
-
     # compute total number of scalar weights used by the controller (all dense layers)
-    layer_sizes = [input_size] + [hidden_size] * NUM_HIDDEN_LAYERS + [output_size]
+    layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
     weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
     total_params = sum(a * b for a, b in weight_shapes)
 
-    problem: NEProblem = NEProblem(
-        objective_sense="max",
-        network=lambda: FlatParamNet(total_params),
-        network_eval_func=evaluate_network,
-        initial_bounds=(-1.0, 1.0),
-        device=DEVICE,
-        num_actors=PARALLEL_CORES,
+    # remove all variables that are no longer necessary
+
+    pop: Population = [create_individual(total_params=total_params) for _ in range (POP_SIZE)]
+    pop = evaluate_pop(pop)
+
+    # create EA steps
+    ops = [
+        EAStep("evaluation", evaluate_pop),
+        EAStep("parent_selection", parent_selection),
+        EAStep("crossover", crossover),
+        EAStep("mutation", mutation),
+        EAStep("evaluation", evaluate_pop),
+        EAStep("survivor_selection", survivor_selection)
+    ]
+
+    # initialize EA
+    ea = EA(
+        population=pop,
+        operations=ops,
+        num_of_generations=MAX_GENERATIONS,
+        quiet=False,
     )
 
-    operators = []
-
-    def get_searcher() -> SearchAlgorithm:
-        match ALGORITHM:
-            case "Custom":
-        
-                return GeneticAlgorithm(
-                    problem=problem,
-                    popsize=POP_SIZE,
-                    elitist=True,
-                    re_evaluate=False,
-                    operators=[]
-                )
-            case "SNES":
-                return SNES(
-                    problem=problem,
-                    popsize=POP_SIZE,
-                    stdev_init=0.3,
-                    # re_evaluate=False,
-                    # elitist=ELITIST,
-                )
-            case "Cosyne":
-                return evotorch.algorithms.Cosyne(
-                    problem=problem,
-                    popsize=POP_SIZE,
-                    tournament_size=5,
-                    mutation_stdev=0.3,
-                )
-
-    
-    # run a few generations to get a good initial population
-    best_evolution: tuple[SearchAlgorithm, float] = None
-    for e in range(SEEDING_ATTEMPTS):
-        print(f"Initial evolution phase {e+1}/{SEEDING_ATTEMPTS}: running {SEEDING_GENERATIONS} generations to seed population")
-        searcher = get_searcher()
-        searcher.run(SEEDING_GENERATIONS)
-        seed_best_fit = searcher.status['best_eval']
-        print(f"  Best fitness after seeding: {seed_best_fit:.5f}")
-        if best_evolution is None or seed_best_fit > best_evolution[1]:
-            best_evolution = (searcher, seed_best_fit)
-
-    searcher, best_fit = best_evolution
-    print(f"Seeding complete. Initial best fitness: {best_fit:.5f}. Starting main evolution.")
-
-    # Use a concrete logger implementation to avoid NotImplementedError
-    logger = evotorch.logging.StdOutLogger(
-        searcher=searcher,
-        interval=1,
-        after_first_step=True
-    )
-
-    generation = 0
+    evolution_start_time = time.time()
 
     def terminate() -> bool:
-        if TIME_LIMIT > 0 and (time.time() - start_time) > TIME_LIMIT:
-            print("Time limit reached, terminating evolution.")
+        if TIME_LIMIT > 0 and (time.time() - evolution_start_time) > TIME_LIMIT:
+            console.log("Time limit reached, terminating evolution.")
             return True
-        if MAX_GENERATIONS > 0 and generation >= MAX_GENERATIONS:
-            print("Max generations reached, terminating evolution.")
+        if MAX_GENERATIONS > 0 and gen >= MAX_GENERATIONS:
+            console.log("Max generations reached, terminating evolution.")
             return True
         return False
     
     interactive_mode = INTERACTIVE_MODE
 
-    # Main evolutionary loop
-    while not terminate():
-        for _ in range(BATCH_SIZE if (MAX_GENERATIONS <= 0 or generation + BATCH_SIZE <= MAX_GENERATIONS) else (MAX_GENERATIONS - generation)):
-            gen_start_time = time.time()
-            searcher.step()
-            generation += 1
-            gen_end_time = time.time()
-            print(f"Generation {generation}, Best Fitness: {searcher.status['best_eval']:.5f}, Time: {gen_end_time - gen_start_time:.5f} seconds")
-            
-        
-        best_individual: Solution = searcher.status['best']
-        best_net = problem.parameterize_net(best_individual)
 
-        if interactive_mode:
-            history = run_bot_session(best_net, method="headless")
-            run_bot_session(best_net, method="viewer")
-            show_qpos_history(history)
-            user_input = input("Continue evolution? (y)es, (n)o, (s)kip interactive: ").strip().lower()
-            if user_input == 'n':
-                print("Evolution terminated by user.")
+    progress = Progress()
+    progress.start()
+    gen = 0
+
+    try:
+
+        outer_loop = progress.add_task("Evolution Progress", total=MAX_GENERATIONS if MAX_GENERATIONS > 0 else TIME_LIMIT // 60 if TIME_LIMIT > 0 else None)
+        inner_loop = progress.add_task(f"Generation {gen+1} to {gen+BATCH_SIZE}", total=BATCH_SIZE)
+
+        # Main evolutionary loop
+
+        while not terminate():
+            batch_size = BATCH_SIZE if (MAX_GENERATIONS <= 0 or gen + BATCH_SIZE <= MAX_GENERATIONS) else (MAX_GENERATIONS - gen)
+            batch_start_time = time.time()
+            progress.update(inner_loop, description=f"Batch {gen // BATCH_SIZE + 1}" if MAX_GENERATIONS > 0 else f"Generation {gen+1} to {gen+BATCH_SIZE}", total=batch_size, completed=0)
+            for _ in range(batch_size):
+                ea.step()
+                gen += 1
+                progress.update(inner_loop, advance=1)
+                progress.update(outer_loop, completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None)  
+            batch_end_time = time.time()
+            best_individual: Individual = ea.get_solution('best', only_alive=False)
+            best_weights = np.array(best_individual.genotype, dtype=np.float32)
+            # console.log(f"Generation {gen}, Best Fitness: {best_individual.fitness:.5f}, Time: {batch_end_time - batch_start_time:.2f}s")
+            progress.update(outer_loop, description=f"Evolution Progress - current best {best_individual.fitness:.5f}")
+
+            if interactive_mode:
+                history = run_bot_session(best_weights, method="headless")
+                run_bot_session(best_weights, method="viewer")
+                show_qpos_history(history)
+                user_input = input("Continue evolution? (y)es, (n)o, (s)kip interactive: ").strip().lower()
+                if user_input == 'n':
+                    console.log("Evolution terminated by user.")
+                    break
+                elif user_input == 's':
+                    interactive_mode = False
+                    console.log("Skipping further interactive prompts.")
+            else:
+                # console.log("Running in non-interactive mode, continuing evolution.")
+                pass
+            if RECORD_BATCH:
+                run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": best_individual.fitness})
+                save_genotype(best_weights, best_individual.fitness)
+            if terminate():
                 break
-            elif user_input == 's':
-                interactive_mode = False
-                print("Skipping further interactive prompts.")
 
-        else:
-            print("Running in non-interactive mode, continuing evolution.")
-        if RECORD_BATCH:
-            run_bot_session(best_net, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": searcher.status['best_eval']})
-            save_genotype(best_net, searcher.status['best_eval'])
+    finally:
+        progress.stop()
+        
 
+    best = ea.get_solution("best", only_alive=False)
+    console.log(best)
+    median = ea.get_solution("median", only_alive=False)
+    console.log(median)
+    worst = ea.get_solution("worst", only_alive=False)
+    console.log(worst)
 
-    best_individual: Solution = searcher.status['best']
-    best_net = problem.parameterize_net(best_individual)
-    best_fit = searcher.status['best_eval']
+    
+    best_weights = np.array(best.genotype, dtype=np.float32)
 
     if RECORD_LAST:
-        print("Recording final best individual...")
-        run_bot_session(best_net, method="record", options={"mode": FITNESS_MODE, "fitness": best_fit, "filename": "final_best"})
-    
-    if INTERACTIVE_MODE:
-        print("Showing final best individual in viewer...")
-        history = run_bot_session(best_net, method="headless")
-        run_bot_session(best_net, method="viewer")
-        show_qpos_history(history)
-        input("Press Enter to continue...")
+        run_bot_session(best_weights, method="record", options={"filename": "final_recording", "mode": FITNESS_MODE, "fitness": best.fitness})
 
-    return best_net, best_fit
+    save_genotype(best_weights, best.fitness)
 
+    # Debug: Compare stored best fitness and recalculated fitness from trajectory
+    history = run_bot_session(best_weights, method="headless")
+    recalculated_fit = fitness(history)
+    print(f"[DEBUG] Stored best.fitness: {best.fitness:.5f}")
+    print(f"[DEBUG] Recalculated fitness from trajectory: {recalculated_fit:.5f}")
+    if 'xpos' in history and len(history['xpos']) > 1:
+        print(f"[DEBUG] Trajectory start: {history['xpos'][0][:2]}")
+        print(f"[DEBUG] Trajectory end: {history['xpos'][-1][:2]}")
 
-def save_genotype(net: torch.nn.Module, fitness: float) -> None:
+    show_qpos_history(history, save=True)
+
+    console.rule(f"Evolution complete in {(TIME_LIMIT - (time.time() - evolution_start_time))//60} minutes.   Best fitness: {best.fitness:.5f}")
+
+    return ea
+
+def save_genotype(weights: np.ndarray, fitness: float) -> None:
     output_path = Path(__file__).parent / "output" / "genotypes"
     output_path.mkdir(exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = output_path / f"genotype_{FITNESS_MODE}_fit {fitness:.4f}_{timestamp}.pt"
-    torch.save(net.state_dict(), filename)
-    print(f"Saved best genotype to {filename}")
+    filename = output_path / f"genotype_{FITNESS_MODE}_fit {fitness:.4f}_{timestamp}"
+    np.save(filename, weights)
+    console.log(f"Saved best genotype to {filename}.npy")
+
+
+def load_genotype(file_path: str) -> np.ndarray:
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Genotype file not found: {file_path}")
+    weights = np.load(path)
+    console.log(f"Loaded genotype from {file_path}")
+    return weights
+
+def test_loaded_genotype(file_path: str) -> None:
+    weights = load_genotype(file_path)
+    history = run_bot_session(weights, method="headless")
+    fit = fitness(history)
+    console.log(f"Tested loaded genotype fitness: {fit:.5f}")
+    run_bot_session(weights, method="viewer")
+    show_qpos_history(history)
 
 def main():
-    _, best_fit = evolve()
-    print(f"Evolution complete. Best fitness: {best_fit:.5f}")
-
-def try_multiple():
-    for algorithm in ["Cosyne", "SNES"]:
-        global ALGORITHM
-        ALGORITHM = algorithm
-        try:
-            best_net, best_fit = evolve()
-            print(f"Run complete. Best fitness: {best_fit:.5f}")
-        except Exception as e:
-            print(f"Error during evolution: {e}")    
-    
-
+    ea: EA = evolve_using_ariel_ec()
+ 
 if __name__ == "__main__":
     main()
