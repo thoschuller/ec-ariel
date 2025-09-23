@@ -23,6 +23,7 @@ from typing import cast, Literal
 from ariel.utils.renderers import tracking_video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+from ariel.simulation.environments.rugged_heightmap import RuggedTerrainWorld
 import ariel.ec as ec
 from ariel.ec.a000 import IntegerMutator
 from ariel.ec.a001 import Individual
@@ -35,9 +36,10 @@ import random
 
 
 # === experiment constants/settings ===
+SIM_WORLD = SimpleFlatWorld
 SEGMENT_LENGTH = 250
 POP_SIZE = 50
-MAX_GENERATIONS = 150
+MAX_GENERATIONS = 250
 TIME_LIMIT = 60 * 60 * 10000  # max run time in seconds
 HIDDEN_SIZE = 8
 SIM_STEPS = 7500  # running at 500 steps per second
@@ -45,12 +47,12 @@ OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
 NUM_HIDDEN_LAYERS = 1
 FITNESS_MODE = "lateral_adjusted"  # Options: "segment_median", "simple", "modern", "lateral_adjusted", "lateral_median"
 
-INTERACTIVE_MODE = True  # If True, show and ask every X generations; if False, run to max
+INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 # NOTE: keep PARALLEL disabled for now, seems to cause an interaction bug with mujoco
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = True  # If True, record a video of the last individual
-BATCH_SIZE = 25
+BATCH_SIZE = 50
 RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
 DETAILED_LOGGING = True  # If True, log detailed fitness components each generation
 
@@ -127,7 +129,7 @@ def initialize_world_and_robot() -> Any:
 
     # Initialise world
     # Import environments from ariel.simulation.environments
-    world = SimpleFlatWorld()
+    world = SIM_WORLD()
 
     # Initialise robot body
     # YOU MUST USE THE GECKO BODY
@@ -135,8 +137,13 @@ def initialize_world_and_robot() -> Any:
 
     # Spawn robot in the world
     # Check docstring for spawn conditions
-    world.spawn(gecko_core.spec, spawn_position=[0, 0, 0])
-    
+    if SIM_WORLD == RuggedTerrainWorld:
+        spawn_pos = [0, 0, 0.25]
+    else:
+        spawn_pos = [0, 0, 0]
+
+    world.spawn(gecko_core.spec, spawn_position=spawn_pos)
+
     # Generate the model and data
     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE
     model = world.spec.compile()
@@ -553,7 +560,7 @@ def crossover_parallel(population: Population, pool) -> Population:
 def mutation(population: Population) -> Population:
     for ind in population:
         if ind.tags.get("mut", False):
-            genes = cast("list[int]", ind.genotype)
+            genes = cast("list[float]", ind.genotype)
             mutated = IntegerMutator.float_creep(
                 individual=genes,
                 span=5,
@@ -566,8 +573,9 @@ def mutation(population: Population) -> Population:
     return population
 
 def mutate_individual(ind: Individual) -> Individual:
+
     mutated = IntegerMutator.float_creep(
-        individual=cast("list[int]", ind.genotype),
+        individual=cast("list[float]", ind.genotype),
         span=5,
         mutation_probability=0.5,
     )
@@ -709,7 +717,7 @@ def evolve_using_ariel_ec():
                     progress.stop()
                     console.rule(f"Generation {gen} - Best Fitness: {best_individual.fitness:.5f}")
                     console.log("Running best individual in viewer...")
-                    console.log(f"Current runtime: {(time.time() - evolution_start_time)//60:.1f} minutes")
+                    console.log(f"Current runtime: {(time.time() - evolution_start_time)/60:.2f} minutes")
 
                     history = run_bot_session(best_weights, method="headless")
                     show_qpos_history(history)
@@ -765,7 +773,7 @@ def evolve_using_ariel_ec():
 
     show_qpos_history(history, save=True)
 
-    console.rule(f"Evolution complete in {(time.time() - evolution_start_time)//60} minutes.   Best fitness: {best.fitness:.5f}")
+    console.rule(f"Evolution complete in {(time.time() - evolution_start_time)/60:.2f} minutes.   Best fitness: {best.fitness:.5f}")
 
     console.log(f"Best fitness: {best.fitness:.5f}")
     console.log(f"Median fitness: {median.fitness:.5f}")
