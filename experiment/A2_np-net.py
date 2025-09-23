@@ -595,9 +595,6 @@ def evolve_using_ariel_ec():
     recalculated_fit = fitness(history)
     print(f"[DEBUG] Stored best.fitness: {best.fitness:.5f}")
     print(f"[DEBUG] Recalculated fitness from trajectory: {recalculated_fit:.5f}")
-    if 'xpos' in history and len(history['xpos']) > 1:
-        print(f"[DEBUG] Trajectory start: {history['xpos'][0][:2]}")
-        print(f"[DEBUG] Trajectory end: {history['xpos'][-1][:2]}")
 
     show_qpos_history(history, save=True)
 
