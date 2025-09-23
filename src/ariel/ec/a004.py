@@ -44,6 +44,7 @@ class EASettings(BaseSettings):
     quiet: bool = False
 
     # EC mechanisms
+    survivors_are_new_generation: bool = True
     is_maximisation: bool = True
     first_generation_id: int = 0
     num_of_generations: int = 100
@@ -124,6 +125,7 @@ class EA(AbstractEA):
         operations: list[EAStep],
         num_of_generations: int | None = None,
         *,
+        survivors_are_new_generation: bool | None = None,
         first_generation_id: int | None = None,
         quiet: bool | None = None,
     ) -> None:
@@ -139,6 +141,9 @@ class EA(AbstractEA):
         num_of_generations : int | None, optional
             Number of generations to run the EA for, by default None.
             If None, the value from the global config is used.
+        survivors_are_new_generation : bool | None, optional
+            Whether survivors are considered part of the new generation, by default None.
+            If None, the value from the global config is used.
         first_generation_id : int | None, optional
             ID of the first generation, by default None.
             If None, the value from the global config is used.
@@ -150,9 +155,9 @@ class EA(AbstractEA):
         self.operations = operations
 
         # Flexible global parameters
-        self.new_generation_are_survivors = (
-            survivors_are_new_generation or config.survivors_are_new_generation
-        )
+        # self.new_generation_are_survivors = (
+        #     survivors_are_new_generation or config.survivors_are_new_generation
+        # )
         self.quiet = quiet or config.quiet
         self.console = Console(quiet=self.quiet)
         self.current_generation = (
