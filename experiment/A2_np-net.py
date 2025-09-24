@@ -17,6 +17,7 @@ from rich.traceback import install
 from rich.progress import track, Progress
 from rich.prompt import Prompt
 import math
+import gc
 
 from typing import cast, Literal
 
@@ -24,14 +25,12 @@ from typing import cast, Literal
 from ariel.utils.renderers import tracking_video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
-from ariel.simulation.environments.rugged_heightmap import RuggedTerrainWorld
+from ariel.simulation.environments.crater_heightmap import CraterTerrainWorld
 from ariel.simulation.environments.simple_tilted_world import TiltedFlatWorld
-from ariel.simulation.environments.boxy_heightmap import BoxyRugged
 import ariel.ec as ec
 from ariel.ec.a000 import IntegerMutator
-from ariel.ec.a001 import Individual
-from ariel.ec.a005 import Crossover
-from ariel.ec.a004 import EASettings, EAStep, EA, Population
+from ariel.ec.a001 import Individual, JSONIterable
+from ariel.ec.a004 import EASettings, EAStep, EA, Population, AbstractEA
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
@@ -39,17 +38,18 @@ import random
 
 
 # === experiment constants/settings ===
-SIM_WORLD = BoxyRugged
+SIM_WORLD = SimpleFlatWorld
+CONTROLLER = "numpy_nn"  # Options: "random", "numpy_nn"
 SEGMENT_LENGTH = 250
-POP_SIZE = 50
+POP_SIZE = 100
 MAX_GENERATIONS = 250
 TIME_LIMIT = 60 * 45  # max run time in seconds
 HIDDEN_SIZE = 8
-SIM_STEPS = 7500  # running at 500 steps per second
+SIM_STEPS = 10000  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
 NUM_HIDDEN_LAYERS = 1
 FITNESS_MODE = "lateral_adjusted"  # Options: "segment_median", "simple", "modern", "lateral_adjusted", "lateral_median"
-
+UNIFORM_CROSSOVER = False  # If True, use uniform crossover; if False, use one-point crossover
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
@@ -75,27 +75,47 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 
-install()
-console = Console()
 
-config = EASettings()
-config.is_maximisation = True
-config.db_handling = "delete"
+# Custom class to log to both terminal and file
+import sys
+class DualWriter:
+    def __init__(self, *files):
+        self.files = files
+    def write(self, data):
+        for f in self.files:
+            f.write(data)
+            f.flush()
+    def flush(self):
+        for f in self.files:
+            f.flush()
+
+log_file_path = Path(__file__).parent / "output" / "logs" / f"log-{time.strftime('%Y%m%d-%H%M%S')}.txt"
+log_file_path.parent.mkdir(exist_ok=True)
+log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)  # line-buffered for immediate flush
+
+dual_writer = DualWriter(log_file, sys.stdout)
+install()
+
+
+console = Console(file=dual_writer, emoji=False, markup=False)
+
+console.log(f"Experiment started with SEED={SEED}, DEVICE={DEVICE}, PARALLEL={PARALLEL}, PARALLEL_CORES={PARALLEL_CORES}")
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
 # def sigmoid(x):
 #         return 1.0 / (1.0 + np.exp(-x))
 
-# def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: dict) -> None:
-#     num_joints = model.nu 
-#     hinge_range = np.pi/2
-#     rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
-#     delta = 0.05
-#     data.ctrl += rand_moves * delta 
-#     data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
-#     history['xpos'].append(to_track[0].xpos.copy())
-#     history['xmat'].append(to_track[0].xmat.copy())
+def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
+    num_joints = model.nu 
+    hinge_range = np.pi/2
+    rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
+    delta = 0.05
+    data.ctrl += rand_moves * delta 
+    data.ctrl = np.clip(data.ctrl, -np.pi/2, np.pi/2)
+    pos = to_track[0].xpos.copy()
+    yaw = yaw_from_xmat(to_track[0].xmat.copy())
+    history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))   
 
 def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
     R = xmat_flat.reshape(3, 3)
@@ -119,8 +139,8 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, 
         x = np.tanh(np.dot(x, ws[i]))
     outputs = np.tanh(np.dot(x, ws[-1]))
     outputs = outputs * (np.pi / 2)  # Scale to [-pi/2, pi/2]
-    outputs += outputs * OUTPUT_DELTA
-    data.ctrl = np.clip(outputs, -np.pi / 2, np.pi / 2)
+    # Apply incremental control update (smooth control changes)
+    data.ctrl = np.clip(data.ctrl + outputs * OUTPUT_DELTA, -np.pi / 2, np.pi / 2)
     pos = to_track[0].xpos.copy()
     yaw = yaw_from_xmat(to_track[0].xmat.copy())
     history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))   
@@ -159,8 +179,10 @@ def initialize_world_and_robot() -> Any:
     return model, data, to_track
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
+
     np.random.seed(SEED)
     random.seed(SEED)
+
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
     
@@ -168,8 +190,12 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
 
     # Initialise history tracking
     history = []
-    
-    mujoco.set_mjcb_control(lambda m, d: numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, HIDDEN_SIZE, model.nu, history))
+
+    match CONTROLLER:
+        case "random":
+            mujoco.set_mjcb_control(lambda m, d: random_controller_move(m, d, to_track, weights, model.nq, HIDDEN_SIZE, model.nu, history))
+        case "numpy_nn":
+            mujoco.set_mjcb_control(lambda m, d: numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, HIDDEN_SIZE, model.nu, history))
 
 
     match method:
@@ -361,7 +387,7 @@ def fitness(history: list) -> float:
             forward_distance = calc_forward_distance(history)
             normalized_forward_distance = forward_distance / segment_count if segment_count > 0 else 0.0
             lateral_distance = calc_lateral_distance(history)
-            normalized_lateral_distance = abs(lateral_distance)
+            normalized_lateral_distance = abs(lateral_distance) / segment_count if segment_count > 0 else 0.0
             fit = max(0.0, normalized_forward_distance - normalized_lateral_distance * LATERAL_PENALTY_FACTOR)
         case "lateral_median":
             median_forward_distance = calc_median_segment_forward_distance(history)
@@ -404,6 +430,10 @@ def evaluate_individual_isolated(genotype_list: list) -> float:
     Isolated evaluation function for multiprocessing.
     This function ensures each process has its own MuJoCo instance and state.
     """
+    # Set seed for consistency across processes
+    np.random.seed(SEED)
+    random.seed(SEED)
+    
     # Clear any existing MuJoCo callbacks to ensure isolation
     mujoco.set_mjcb_control(None)
     
@@ -432,7 +462,7 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
     # Convert list of [x, y, z, yaw] arrays to numpy array
     pos_data = np.array(history)
 
-    plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
 
     # Plot x, y trajectory
     plt.plot(pos_data[:, 0], pos_data[:, 1], 'b-', label='Path')
@@ -459,7 +489,8 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
         output_path.mkdir(exist_ok=True)
         timestamp = int(time.time())
         filename = output_path / f"trajectory_fit_{fit:.5f}_{timestamp}.png"
-        plt.savefig(filename)
+        fig.savefig(filename)
+        plt.close(fig)
         console.log(f"Plot saved to {filename}")
 
 def create_individual(total_params: int) -> Individual:
@@ -467,9 +498,11 @@ def create_individual(total_params: int) -> Individual:
     genotype = np.random.uniform(-1.0, 1.0, size=total_params).astype(np.float32)
     ind = Individual()
     ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
+    ind.requires_eval = True
     return ind
 
 def create_population(total_params: int, pop_size: int, pool = None) -> Population:
+    console.log(f"WORLD: {SIM_WORLD.__name__}, POP_SIZE: {pop_size}, TOTAL_PARAMS: {total_params}, PARALLEL: {PARALLEL}, PARALLEL_CORES: {PARALLEL_CORES}")
     if pool:
         return pool.map(create_individual, [total_params] * pop_size)
     else:
@@ -477,101 +510,154 @@ def create_population(total_params: int, pop_size: int, pool = None) -> Populati
 
 def parent_selection(population: Population) -> Population:
     """Tournament selection"""
-    safe_population = population.copy()
 
     # Shuffle population to avoid bias
-    random.shuffle(safe_population)
+    random.shuffle(population)
 
     # Tournament selection
-    for idx in range(0, len(safe_population) - 1, 2):
-        ind_i = safe_population[idx]
-        ind_j = safe_population[idx + 1]
+    for idx in range(0, len(population) - 1, 2):
+        ind_i = population[idx]
+        ind_j = population[idx + 1]
 
         # Compare fitness values and update tags
-        if ind_i.fitness > ind_j.fitness and config.is_maximisation:
-            ind_i.tags = {"ps": True}
-            ind_j.tags = {"ps": False}
+        if ind_i.fitness > ind_j.fitness:
+            ind_i.tags['ps'] = True
+            ind_j.tags['ps'] = False
         else:
-            ind_i.tags = {"ps": False}
-            ind_j.tags = {"ps": True}
+            ind_i.tags['ps'] = False
+            ind_j.tags['ps'] = True
     return population
 
-def crossover(population: Population) -> Population:
-    """One point crossover"""
 
-    parents = [ind for ind in population if ind.tags.get("ps", False)]
-    for idx in range(0, len(parents) - 1, 2):
-        parent_i = parents[idx].model_copy()
-        parent_j = parents[idx+1].model_copy()
-        genotype_i, genotype_j = Crossover.one_point(
-            cast("list[float]", parent_i.genotype),
-            cast("list[float]", parent_j.genotype),
-        )
+class Crossover:
+    @staticmethod
+    def one_point(
+        parent_i: JSONIterable,
+        parent_j: JSONIterable,
+        crossover_point: int = None,
+    ) -> tuple[JSONIterable, JSONIterable]:
+        # Prep
+        parent_i_arr_shape = np.array(parent_i).shape
+        parent_j_arr_shape = np.array(parent_j).shape
+        parent_i_arr = np.array(parent_i).flatten().copy()
+        parent_j_arr = np.array(parent_j).flatten().copy()
 
-        # First child   
-        child_i = Individual()
-        child_i.genotype = genotype_i
-        child_i.tags = {"mut": True}
-        child_i.requires_eval = True
+        # Ensure parents have the same length
+        if parent_i_arr_shape != parent_j_arr_shape:
+            msg = "Parents must have the same length"
+            raise ValueError(msg)
 
-        # Second child
-        child_j = Individual()
-        child_j.genotype = genotype_j
-        child_j.tags = {"mut": True}
-        child_j.requires_eval = True
+        # Select crossover point
+        if crossover_point is None:
+            crossover_point = RNG.integers(0, len(parent_i_arr))
 
-        population.extend([child_i, child_j])
-    return population
+        # Copy over parents
+        child1 = parent_i_arr.copy()
+        child2 = parent_j_arr.copy()
 
-def crossover_individuals(ind1 : Individual, ind2: Individual) -> tuple[Individual, Individual]:
+        # Perform crossover
+        child1[crossover_point:] = parent_j_arr[crossover_point:]
+        child2[crossover_point:] = parent_i_arr[crossover_point:]
+
+        # Correct final shape
+        child1 = child1.reshape(parent_i_arr_shape).astype(int).tolist()
+        child2 = child2.reshape(parent_j_arr_shape).astype(int).tolist()
+        return child1, child2
+    
+    @staticmethod
+    def uniform(
+        parent_i: JSONIterable,
+        parent_j: JSONIterable,
+    ) -> tuple[JSONIterable, JSONIterable]:
+        # Prep
+        parent_i_arr_shape = np.array(parent_i).shape
+        parent_j_arr_shape = np.array(parent_j).shape
+        parent_i_arr = np.array(parent_i).flatten().copy()
+        parent_j_arr = np.array(parent_j).flatten().copy()
+
+        # Ensure parents have the same length
+        if parent_i_arr_shape != parent_j_arr_shape:
+            msg = "Parents must have the same length"
+            raise ValueError(msg)
+
+        # Create mask for uniform crossover
+        mask = RNG.integers(0, 2, size=len(parent_i_arr)).astype(bool)
+
+        # Copy over parents
+        child1 = parent_i_arr.copy()
+        child2 = parent_j_arr.copy()
+
+        # Perform crossover using the mask
+        child1[mask] = parent_j_arr[mask]
+        child2[mask] = parent_i_arr[mask]
+
+        # Correct final shape
+        child1 = child1.reshape(parent_i_arr_shape).astype(int).tolist()
+        child2 = child2.reshape(parent_j_arr_shape).astype(int).tolist()
+        return child1, child2
+
+def crossover_individuals(ind1 : Individual, ind2: Individual, uniform_crossover: bool = False) -> tuple[Individual, Individual]:
+
+    # Perform one-point crossover
+
     parent_i = ind1.model_copy()
     parent_j = ind2.model_copy()
-    genotype_i, genotype_j = Crossover.one_point(
-        cast("list[float]", parent_i.genotype),
-        cast("list[float]", parent_j.genotype),
-    )
+
+    # Decide which to crossover and which to clone directly
+
+    if random.random() < 0.25:
+        genotype_i = parent_i.genotype
+        genotype_j = parent_j.genotype
+    
+    else:
+        if uniform_crossover:
+            genotype_i, genotype_j = Crossover.uniform(
+                cast("list[float]", parent_i.genotype),
+                cast("list[float]", parent_j.genotype),
+            )
+        else:
+            genotype_i, genotype_j = Crossover.one_point(
+                cast("list[float]", parent_i.genotype),
+                cast("list[float]", parent_j.genotype),
+            )
 
     # First child   
     child_i = Individual()
     child_i.genotype = genotype_i
-    child_i.tags = {"mut": True}
+    child_i.tags['mut'] = True
     child_i.requires_eval = True
 
     # Second child
     child_j = Individual()
     child_j.genotype = genotype_j
-    child_j.tags = {"mut": True}
+    child_j.tags['mut'] = True
     child_j.requires_eval = True
+
+    parent_i.tags['ps'] = False
+    parent_j.tags['ps'] = False
 
     return child_i, child_j
 
 
 def crossover_parallel(population: Population, pool) -> Population:
-    parents = [ind for ind in population if ind.tags.get("ps", False)]
-    children = []
+    parents = [ind for ind in population if ind.tags.get('ps', False)]
     if pool and len(parents) >= 2:
+        children = []
         parent_pairs = [(parents[i], parents[i + 1]) for i in range(0, len(parents) - 1, 2)]
-        children_pairs = pool.starmap(crossover_individuals, parent_pairs)
+        children_pairs = pool.starmap(crossover_individuals, [(p1, p2, UNIFORM_CROSSOVER) for p1, p2 in parent_pairs])
         for child_i, child_j in children_pairs:
             children.extend([child_i, child_j])
+        population.extend(children)
     elif not pool:
-        children = crossover(population)
-    population.extend(children)
-    return population
+        for idx in range(0, len(parents) - 1, 2):
+            parent_i = parents[idx]
+            parent_j = parents[idx+1]
 
-def mutation(population: Population) -> Population:
-    for ind in population:
-        if ind.tags.get("mut", False):
-            genes = cast("list[float]", ind.genotype)
-            mutated = IntegerMutator.float_creep(
-                individual=genes,
-                span=5,
-                mutation_probability=0.5,
-            )
-            ind.genotype = mutated
-            ind.tags = {"mut": False}
-            ind.requires_eval = True
+            child_i, child_j = crossover_individuals(parent_i, parent_j, UNIFORM_CROSSOVER)
 
+            population.extend([child_i, child_j])
+        else:
+            pass
     return population
 
 def mutate_individual(ind: Individual) -> Individual:
@@ -582,20 +668,22 @@ def mutate_individual(ind: Individual) -> Individual:
         mutation_probability=0.5,
     )
     ind.genotype = mutated
-    ind.tags = {"mut": False}
+    ind.tags = {'mut': False}
     ind.requires_eval = True
     return ind
 
-def mutation_parallel(population: Population, pool) -> Population:
-    to_mutate = [ind for ind in population if ind.tags.get("mut", False)]
+def mutation(population: Population, pool) -> Population:
+    to_mutate = [ind for ind in population if ind.tags.get('mut', False)]
     if pool and to_mutate:
         mutated_inds = pool.map(mutate_individual, to_mutate)
         # Replace mutated individuals in population
-        mutate_idx = [i for i, ind in enumerate(population) if ind.tags.get("mut", False)]
+        mutate_idx = [i for i, ind in enumerate(population) if ind.tags.get('mut', False)]
         for idx, mutated in zip(mutate_idx, mutated_inds):
             population[idx] = mutated
     elif not pool:
-        population = mutation(population)
+        for i, ind in enumerate(population):
+            if ind.tags.get('mut', False):
+                population[i] = mutate_individual(ind)  # Fix: Update the population directly
     return population
 
 def survivor_selection(population: Population) -> Population:
@@ -609,14 +697,14 @@ def survivor_selection(population: Population) -> Population:
         ind_j = population[idx + 1]
 
         # Kill worse individual
-        if ind_i.fitness > ind_j.fitness and config.is_maximisation:
+        if ind_i.fitness > ind_j.fitness:
             ind_j.alive = False
         else:
             ind_i.alive = False
 
         # Termination condition
         current_pop_size -= 1
-        if current_pop_size <= config.target_population_size:
+        if current_pop_size <= POP_SIZE:
             break
     return population
 
@@ -666,7 +754,7 @@ def evolve_using_ariel_ec():
             EAPoolStep("evaluation", evaluate_pop, pool=pool),
             EAStep("parent_selection", parent_selection),
             EAPoolStep("crossover", crossover_parallel, pool=pool),
-            EAPoolStep("mutation",  mutation_parallel, pool=pool),
+            EAPoolStep("mutation",  mutation, pool=pool),
             EAPoolStep("evaluation", evaluate_pop, pool=pool),
             EAStep("survivor_selection", survivor_selection)
         ]
@@ -706,6 +794,7 @@ def evolve_using_ariel_ec():
                 batch_size = BATCH_SIZE if (MAX_GENERATIONS <= 0 or gen + BATCH_SIZE <= MAX_GENERATIONS) else (MAX_GENERATIONS - gen)
                 if interactive_mode or DETAILED_LOGGING:
                     progress.reset(inner_loop, description=f"Batch {gen // BATCH_SIZE + 1}" if MAX_GENERATIONS > 0 else f"Generation {gen+1} to {gen+BATCH_SIZE}", total=batch_size, completed=0)
+                    console.log(f"Starting batch {gen // BATCH_SIZE + 1}" if MAX_GENERATIONS > 0 else f"Starting generation {gen+1} to {gen+BATCH_SIZE}")
                 for _ in range(batch_size):
                     ea.step()
                     gen += 1
@@ -772,6 +861,15 @@ def evolve_using_ariel_ec():
 
     history = run_bot_session(best_weights, method="headless")
 
+    #==== For multi-run analysis ====
+    median_history = run_bot_session(np.array(median.genotype, dtype=np.float32), method="headless")
+    worst_history = run_bot_session(np.array(worst.genotype, dtype=np.float32), method="headless")
+    run_bot_session(np.array(median.genotype, dtype=np.float32), method="record", options={"filename": "median_recording", "mode": FITNESS_MODE, "fitness": median.fitness})
+    run_bot_session(np.array(worst.genotype, dtype=np.float32), method="record", options={"filename": "worst_recording", "mode": FITNESS_MODE, "fitness": worst.fitness})
+    show_qpos_history(worst_history, save=True)
+    show_qpos_history(median_history, save=True)
+    #=================================
+
     save_genotype(best_weights, best.fitness)
 
     show_qpos_history(history, save=True)
@@ -792,6 +890,8 @@ def evolve_using_ariel_ec():
 
     console.log(f"Median forward distance: {calc_median_segment_forward_distance(history):.2f}")
     console.log(f"Median lateral distance: {calc_median_segment_lateral_distance(history):.2f}")
+
+    console.log(f"Sanity check - re-evaluated fitness: {fitness(history):.5f}")
 
     if interactive_mode:
         console.log("Running best individual in viewer...")
@@ -827,41 +927,121 @@ def test_loaded_genotype(file_path: str) -> None:
 def main():
     ea: EA = evolve_using_ariel_ec()
 
-def run_multiple():
-    # log all prints and console outputs to a file AND terminal
-    log_path = Path(__file__).parent / "output" / "logs"
-    log_path.mkdir(exist_ok=True)
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    log_file = log_path / f"evolution_log_{timestamp}.txt"
 
-    class Tee:
-        def __init__(self, *files):
-            self.files = files
-        def write(self, obj):
-            for f in self.files:
-                f.write(obj)
-                f.flush()
-        def flush(self):
-            for f in self.files:
-                f.flush()
+def simple_multi_run():
+    # Results containers
+    baseline_best_lateral_adjusted = []
+    baseline_median_lateral_adjusted = []
+    baseline_worst_lateral_adjusted = []
+    baseline_best_lateral_median = []
+    baseline_median_lateral_median = []
+    baseline_worst_lateral_median = []
 
-    import sys
-    with open(log_file, "w") as f:
-        tee_out = Tee(sys.stdout, f)
-        tee_err = Tee(sys.stderr, f)
-        with contextlib.redirect_stdout(tee_out), contextlib.redirect_stderr(tee_err):
-            console.log(f"Logging to {log_file}")
-            runs = 3
-            worlds = [SimpleFlatWorld, BoxyRugged, RuggedTerrainWorld]
-            for world in worlds:
-                console.log(f"Running world: {world.__name__}")
-                global SIM_WORLD
-                SIM_WORLD = world
-                for i in range(runs):
-                    console.rule(f"[red] Starting run {i+1} of {runs} ")
-                    ea = evolve_using_ariel_ec()
-                    console.rule(f"[red] Completed run {i+1} of {runs} ")
-                    time.sleep(5)  # brief pause between runs
+    exp_best_lateral_adjusted = []
+    exp_median_lateral_adjusted = []
+    exp_worst_lateral_adjusted = []
+    exp_best_lateral_median = []
+    exp_median_lateral_median = []
+    exp_worst_lateral_median = []
+
+    runs = 3
+    fitness_modes = ["lateral_adjusted", "lateral_median"]
+    global CONTROLLER
+    global FITNESS_MODE
+
+    def run_baseline(fitness_mode):
+        # Run EA loop with controller set to 'random' (weights ignored)
+        global FITNESS_MODE
+        FITNESS_MODE = fitness_mode
+        bests, medians, worsts = [], [], []
+        global CONTROLLER
+        for run_idx in range(runs):
+            CONTROLLER = "random"
+            run_label = f"Run {run_idx+1}/3 | Baseline | Fitness: {fitness_mode}"
+            console.rule(f"[cyan] {run_label}")
+            print(f"[BASELINE] {run_label}")
+            ea = evolve_using_ariel_ec()
+            best = ea.get_solution("best", only_alive=False)
+            median = ea.get_solution("median", only_alive=False)
+            worst = ea.get_solution("worst", only_alive=False)
+            bests.append(best.fitness)
+            medians.append(median.fitness)
+            worsts.append(worst.fitness)
+            del best, median, worst, ea
+            time.sleep(5)
+            plt.close('all')
+            gc.collect()
+            time.sleep(5)
+        CONTROLLER = "numpy_nn"  # Restore for experiment runs
+        return bests, medians, worsts
+
+    for mode in fitness_modes:
+        # Baseline runs
+        console.rule(f"[blue] Baseline runs for FITNESS_MODE={mode}")
+        bests, medians, worsts = run_baseline(mode)
+        if mode == "lateral_adjusted":
+            baseline_best_lateral_adjusted.extend(bests)
+            baseline_median_lateral_adjusted.extend(medians)
+            baseline_worst_lateral_adjusted.extend(worsts)
+        else:
+            baseline_best_lateral_median.extend(bests)
+            baseline_median_lateral_median.extend(medians)
+            baseline_worst_lateral_median.extend(worsts)
+
+
+        # Evolutionary runs
+        for run_idx in range(runs):
+            FITNESS_MODE = mode
+            run_label = f"Run {run_idx+1}/3 | Experiment | Fitness: {FITNESS_MODE}"
+            console.rule(f"[magenta] {run_label}")
+            print(f"[EXPERIMENT] {run_label}")
+            ea = evolve_using_ariel_ec()
+            best = ea.get_solution("best", only_alive=False)
+            median = ea.get_solution("median", only_alive=False)
+            worst = ea.get_solution("worst", only_alive=False)
+            if mode == "lateral_adjusted":
+                exp_best_lateral_adjusted.append(best.fitness)
+                exp_median_lateral_adjusted.append(median.fitness)
+                exp_worst_lateral_adjusted.append(worst.fitness)
+            else:
+                exp_best_lateral_median.append(best.fitness)
+                exp_median_lateral_median.append(median.fitness)
+                exp_worst_lateral_median.append(worst.fitness)
+            del best, median, worst
+            plt.close('all')
+            console.rule(f"[magenta] Completed {run_label}")
+            time.sleep(5)
+            del ea
+            time.sleep(5)
+            gc.collect()
+            time.sleep(5)
+
+    # Sort results for easier comparison
+    for fit_list in [baseline_best_lateral_adjusted, baseline_median_lateral_adjusted, baseline_worst_lateral_adjusted,
+                     baseline_best_lateral_median, baseline_median_lateral_median, baseline_worst_lateral_median,
+                     exp_best_lateral_adjusted, exp_median_lateral_adjusted, exp_worst_lateral_adjusted,
+                     exp_best_lateral_median, exp_median_lateral_median, exp_worst_lateral_median]:
+        fit_list.sort(reverse=True)
+
+    console.rule("[green] All runs complete. Summary of results:")
+
+    console.log(f"Baseline (Lateral Adjusted) - Best: {baseline_best_lateral_adjusted}")
+    console.log(f"Baseline (Lateral Adjusted) - Median: {baseline_median_lateral_adjusted}")
+    console.log(f"Baseline (Lateral Adjusted) - Worst: {baseline_worst_lateral_adjusted}")
+
+    console.log(f"Baseline (Lateral Median) - Best: {baseline_best_lateral_median}")
+    console.log(f"Baseline (Lateral Median) - Median: {baseline_median_lateral_median}")
+    console.log(f"Baseline (Lateral Median) - Worst: {baseline_worst_lateral_median}")
+
+    console.log(f"Experiment (Lateral Adjusted) - Best: {exp_best_lateral_adjusted}")
+    console.log(f"Experiment (Lateral Adjusted) - Median: {exp_median_lateral_adjusted}")
+    console.log(f"Experiment (Lateral Adjusted) - Worst: {exp_worst_lateral_adjusted}")
+
+    console.log(f"Experiment (Lateral Median) - Best: {exp_best_lateral_median}")
+    console.log(f"Experiment (Lateral Median) - Median: {exp_median_lateral_median}")
+    console.log(f"Experiment (Lateral Median) - Worst: {exp_worst_lateral_median}")
+
+    console.rule("[green] End of multi-run summary.")
 
 if __name__ == "__main__":
-    run_multiple
+    simple_multi_run()

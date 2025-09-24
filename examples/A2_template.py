@@ -7,7 +7,11 @@ from mujoco import viewer
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
+from ariel.simulation.environments.amphiteater_heightmap import AmphitheatreTerrainWorld as bad_spelling
+from ariel.simulation.environments.amphitheatre_heightmap import AmphitheatreTerrainWorld
+from ariel.simulation.environments.boxy_heightmap import BoxyRugged
 # Local libraries
+from ariel.simulation.environments.crater_heightmap import CraterTerrainWorld
 from ariel.utils.renderers import video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 
@@ -106,7 +110,7 @@ def main():
     
     # Initialise world
     # Import environments from ariel.simulation.environments
-    world = SimpleFlatWorld()
+    world = SimpleFlatWorld()  
 
     # Initialise robot body
     # YOU MUST USE THE GECKO BODY
@@ -133,22 +137,22 @@ def main():
 
     # This opens a viewer window and runs the simulation with the controller you defined
     # If mujoco.set_mjcb_control(None), then you can control the limbs yourself.
-    # viewer.launch(
-    #     model=model,  # type: ignore
-    #     data=data,
-    # )
-
-    # Non-default VideoRecorder options
-    PATH_TO_VIDEO_FOLDER = "./__videos__"
-    video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER)
-
-    # Render with video recorder
-    video_renderer(
-        model,
-        data,
-        duration=30,
-        video_recorder=video_recorder,
+    viewer.launch(
+        model=model,  # type: ignore
+        data=data,
     )
+
+    # # Non-default VideoRecorder options
+    # PATH_TO_VIDEO_FOLDER = "./__videos__"
+    # video_recorder = VideoRecorder(output_folder=PATH_TO_VIDEO_FOLDER)
+
+    # # Render with video recorder
+    # video_renderer(
+    #     model,
+    #     data,
+    #     duration=30,
+    #     video_recorder=video_recorder,
+    # )
     
     show_qpos_history(HISTORY)
     # If you want to record a video of your simulation, you can use the video renderer.
