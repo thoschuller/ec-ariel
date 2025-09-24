@@ -54,9 +54,9 @@ UNIFORM_CROSSOVER = False  # If True, use uniform crossover; if False, use one-p
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
-RECORD_LAST = True  # If True, record a video of the last individual
+RECORD_LAST = False  # If True, record a video of the last individual
 BATCH_SIZE = 25
-RECORD_BATCH = True  # If True, record a video of the best individual every BATCH_SIZE generations
+RECORD_BATCH = False  # If True, record a video of the best individual every BATCH_SIZE generations
 DETAILED_LOGGING = True  # If True, log detailed fitness components each generation
 
 
@@ -66,7 +66,7 @@ LATERAL_PENALTY_FACTOR = 0.1
 
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
-PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count() - 1  # leave one core free for the system itself
+PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # leave one core free for the system itself
 
 global SEED
 SEED = 42
@@ -193,8 +193,8 @@ def initialize_world_and_robot() -> Any:
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
 
-    np.random.seed(SEED)
-    random.seed(SEED)
+#    np.random.seed(SEED)
+#    random.seed(SEED)
 
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
@@ -447,8 +447,8 @@ def evaluate_individual_isolated(genotype_list: list) -> float:
     This function ensures each process has its own MuJoCo instance and state.
     """
     # Set seed for consistency across processes
-    np.random.seed(SEED)
-    random.seed(SEED)
+#    np.random.seed(SEED)
+#    random.seed(SEED)
     
     # Clear any existing MuJoCo callbacks to ensure isolation
     mujoco.set_mjcb_control(None)
@@ -726,7 +726,6 @@ def survivor_selection(population: Population) -> Population:
 
 
 def log_stats(population: Population) -> Population:
-    print(f"popsize: {len(population)}")
     pop_fitness = [ind.fitness for ind in population]
     pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
     pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
@@ -920,8 +919,8 @@ def evolve_using_ariel_ec():
     #==== For multi-run analysis ====
     median_history = run_bot_session(np.array(median.genotype, dtype=np.float32), method="headless")
     worst_history = run_bot_session(np.array(worst.genotype, dtype=np.float32), method="headless")
-    run_bot_session(np.array(median.genotype, dtype=np.float32), method="record", options={"filename": "median_recording", "mode": FITNESS_MODE, "fitness": median.fitness})
-    run_bot_session(np.array(worst.genotype, dtype=np.float32), method="record", options={"filename": "worst_recording", "mode": FITNESS_MODE, "fitness": worst.fitness})
+#    run_bot_session(np.array(median.genotype, dtype=np.float32), method="record", options={"filename": "median_recording", "mode": FITNESS_MODE, "fitness": median.fitness})
+#    run_bot_session(np.array(worst.genotype, dtype=np.float32), method="record", options={"filename": "worst_recording", "mode": FITNESS_MODE, "fitness": worst.fitness})
     show_qpos_history(worst_history, save=True)
     show_qpos_history(median_history, save=True)
     #=================================
@@ -1001,7 +1000,7 @@ def simple_multi_run():
     exp_worst_lateral_median = []
 
     runs = 3
-    fitness_modes = ["lateral_adjusted"]
+    fitness_modes = ["lateral_adjusted", "lateral_median"]
     global CONTROLLER
     global FITNESS_MODE
     global MULTI_RUN_OPTIONS
