@@ -1,6 +1,11 @@
+"""
+This is an evolutionary algorithm experiment using the Ariel framework.
+It evolves a population of numpy neural network weights to control a gecko robot.
+The evolution is based on two different fitness calculations, for which both an experiment and baseline evaluation are executed in threefold to compare their effectiveness.
+"""
+
 # Third-party libraries
 import csv
-import contextlib
 from typing import Any
 
 import numpy as np
@@ -12,15 +17,15 @@ from pathlib import Path
 import multiprocessing
 # if you get errors here, you may need to install torch and torchvision
 # uv pip install torch torchvision --torch-backend=auto
-from numpy import floating
 from rich.console import Console
 from rich.traceback import install
-from rich.progress import track, Progress
+from rich.progress import Progress
 from rich.prompt import Prompt
 import math
 import gc
+import sys
 
-from typing import cast, Literal
+from typing import cast
 
 # Local libraries
 from ariel.utils.renderers import tracking_video_renderer
@@ -28,10 +33,9 @@ from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.simulation.environments.crater_heightmap import CraterTerrainWorld
 from ariel.simulation.environments.simple_tilted_world import TiltedFlatWorld
-import ariel.ec as ec
 from ariel.ec.a000 import IntegerMutator
 from ariel.ec.a001 import Individual, JSONIterable
-from ariel.ec.a004 import EASettings, EAStep, EA, Population, AbstractEA
+from ariel.ec.a004 import EASettings, EAStep, EA, Population
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
@@ -39,49 +43,54 @@ import random
 
 
 # === experiment constants/settings ===
-SIM_WORLD = SimpleFlatWorld
+SIM_WORLD = SimpleFlatWorld # other options should be used with care, as they are randomly generated and require changing the evaluation to evaluate the whole population at every step
 CONTROLLER = "numpy_nn"  # Options: "random", "numpy_nn"
-SEGMENT_LENGTH = 250
-POP_SIZE = 100
-MAX_GENERATIONS = 250
-TIME_LIMIT = -1  # max run time in seconds
-HIDDEN_SIZE = 8
+SEGMENT_LENGTH = 250 # step count over which the median distances are calculated and total distance is normalized
+POP_SIZE = 100 # population size
+MAX_GENERATIONS = 250 # maximum number of generations to run in an evolution
+TIME_LIMIT = 60*45  # max run time in seconds, set to -1 to disable
+# NOTE: this time limit is enough to run the full experiment using 14 threads of the Ryzen 5700X. It may be necessary to set a higher limit on different systems.
+HIDDEN_SIZE = 8 # the number of neurons in the hidden layer of the numpy neural network
 SIM_STEPS = 10000  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
-NUM_HIDDEN_LAYERS = 1
+NUM_HIDDEN_LAYERS = 1 # the number of hidden layers used in the numpy neural network
 FITNESS_MODE = "lateral_adjusted"  # Options: "segment_median", "simple", "modern", "lateral_adjusted", "lateral_median"
 UNIFORM_CROSSOVER = False  # If True, use uniform crossover; if False, use one-point crossover
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
 # IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = False  # If True, record a video of the last individual
-BATCH_SIZE = 25
+BATCH_SIZE = 25 # The number of individuals between recordings or interactive prompts
 RECORD_BATCH = False  # If True, record a video of the best individual every BATCH_SIZE generations
 DETAILED_LOGGING = True  # If True, log detailed fitness components each generation
 
 
 UPRIGHT_FACTOR = 0  # Set to 0 to ignore vertical orientation
-LATERAL_PENALTY_FACTOR = 0.1 
+LATERAL_PENALTY_FACTOR = 0.1 # factor to multiply lateral distance with before subtracting from forward distance for fitness
 
 
+# NOTE: cuda accelleration is currently not supported for this script
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
 PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # leave one core free for the system itself
 
 global SEED
-SEED = 42
+SEED = 42 # A specific seed is set here for reproducibility of results
 global RNG
 RNG = np.random.default_rng(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
+
+# make sure output directories exist
+STATS_OUTPUT_PATH = Path(__file__).parent / "output"
+STATS_OUTPUT_PATH.mkdir(exist_ok=True)
 
 STATS_CSV_PATH = Path(__file__).parent / "output" / "logs" / f"gen_stats_{CONTROLLER}_{FITNESS_MODE}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
 STATS_CSV_PATH.parent.mkdir(exist_ok=True)
 
 
 
-# Custom class to log to both terminal and file
-import sys
+# Double-log to file and terminal
 class DualWriter:
     def __init__(self, *files):
         self.files = files
@@ -98,16 +107,18 @@ log_file_path.parent.mkdir(exist_ok=True)
 log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)  # line-buffered for immediate flush
 
 dual_writer = DualWriter(log_file, sys.stdout)
+
+# Fancy console messages and progress bars
 install()
-
-
 console = Console(file=dual_writer, emoji=False, markup=False)
-
 console.log(f"Experiment started with SEED={SEED}, DEVICE={DEVICE}, PARALLEL={PARALLEL}, PARALLEL_CORES={PARALLEL_CORES}")
 
-plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
+plt.ioff()  # Turn off interactive mode for plotting to avoid blocking when running non-interactively
 
 def log_generation_stats(filename, pop_mean, pop_std, pop_max):
+    """
+    Log generation population statistics to a CSV file.
+    """
     file_exists = Path(filename).exists()
     with open(filename, "a", newline='') as csvfile:
         writer = csv.writer(csvfile)
@@ -120,6 +131,9 @@ def log_generation_stats(filename, pop_mean, pop_std, pop_max):
         ])
 
 def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
+    """
+    A simple random controller applying random changes to the servos
+    """
     num_joints = model.nu 
     hinge_range = np.pi/2
     rand_moves = np.random.uniform(low= -hinge_range, high=hinge_range, size=num_joints) 
@@ -192,9 +206,9 @@ def initialize_world_and_robot() -> Any:
     return model, data, to_track
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
-
-#    np.random.seed(SEED)
-#    random.seed(SEED)
+    """
+    Run a single simulation session with given weights and method.
+    """
 
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
@@ -230,7 +244,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             console.log(f"Recorded episode saved to {video_path}/{video_file}")
         case "viewer":
             viewer.launch(model, data)
-        case "headless":
+        case "headless": # for evaluation-only sessions
             mujoco.mj_step(model, data, nstep=SIM_STEPS)
 
     mujoco.set_mjcb_control(None)
@@ -238,6 +252,9 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     return history
 
 def calc_origin_distance(history: list) -> float:
+    """
+    Calculate the straight-line distance from the start to the end position.
+    """
     start = np.array(history[0][:2])
     end = np.array(history[-1][:2])
     return np.linalg.norm(end - start)
@@ -782,7 +799,7 @@ def evolve_using_ariel_ec():
         pop: Population = create_population(total_params=total_params, pop_size=POP_SIZE, pool=pool)
         pop = evaluate_pop(pop, pool=pool)
 
-        print(f"Controller: {CONTROLLER}, Fitness Mode: {FITNESS_MODE}, Population Size: {len(pop)}, Total Params: {total_params}")
+        console.log(f"Controller: {CONTROLLER}, Fitness Mode: {FITNESS_MODE}, Population Size: {len(pop)}, Total Params: {total_params}")
 
         if CONTROLLER == "numpy_nn":
             ops = [
@@ -799,8 +816,6 @@ def evolve_using_ariel_ec():
                 EAPoolStep("evaluation", evaluate_pop, pool=pool),
                 EAStep("log_stats", log_stats),
             ]
-
-        print(f"Using operations: {[op.name for op in ops]}")
 
         # initialize EA
         ea = EA(
@@ -832,7 +847,7 @@ def evolve_using_ariel_ec():
 
         try:
 
-            outer_loop = progress.add_task("Evolution Progress", total=MAX_GENERATIONS if MAX_GENERATIONS > 0 else TIME_LIMIT // 60 if TIME_LIMIT > 0 else None)
+            outer_loop = progress.add_task("Evolution Progress", total=MAX_GENERATIONS)
             if interactive_mode or DETAILED_LOGGING:
                 inner_loop = progress.add_task(f"Generation {gen+1} to {gen+BATCH_SIZE}", total=BATCH_SIZE)
 
@@ -895,7 +910,7 @@ def evolve_using_ariel_ec():
 
 
         finally:
-            if MULTI_RUN_OPTIONS and MULTI_RUN_OPTIONS['progress'] is not None:
+            if MULTI_RUN_OPTIONS is not None and MULTI_RUN_OPTIONS['progress'] is not None:
                 pass
             else:
                 progress.stop()
@@ -1025,7 +1040,7 @@ def simple_multi_run():
             run_label = f"Run {run_idx+1}/3 | Baseline | Fitness: {fitness_mode}"
             console.rule(f"[cyan] {run_label}")
             multirun_progress.update(multi_task, description=f"Multi-Run - Baseline run {run_idx+1}/3 for FITNESS_MODE={mode}")
-            print(f"[BASELINE] {run_label}")
+            console.log(f"[BASELINE] {run_label}")
             ea = evolve_using_ariel_ec()
             best = ea.get_solution("best", only_alive=False)
             median = ea.get_solution("median", only_alive=False)
@@ -1066,7 +1081,7 @@ def simple_multi_run():
                 run_label = f"Run {run_idx+1}/3 | Experiment | Fitness: {FITNESS_MODE}"
                 console.rule(f"[magenta] {run_label}")
                 multirun_progress.update(multi_task, description=f"Multi-Run - Experiment run {run_idx+1}/3 for FITNESS_MODE={mode}")
-                print(f"[EXPERIMENT] {run_label}")
+                console.log(f"[EXPERIMENT] {run_label}")
                 ea = evolve_using_ariel_ec()
                 best = ea.get_solution("best", only_alive=False)
                 median = ea.get_solution("median", only_alive=False)
