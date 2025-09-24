@@ -1,21 +1,5 @@
 # Third-party libraries
 import csv
-
-def log_generation_stats(filename, generation, best_fit, median_fit, worst_fit, pop_mean, pop_std, best_forward, median_forward, worst_forward, best_lateral, median_lateral, worst_lateral):
-    file_exists = Path(filename).exists()
-    with open(filename, "a", newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        if not file_exists:
-            writer.writerow([
-                "generation", "best_fitness", "median_fitness", "worst_fitness", "pop_mean", "pop_std",
-                "best_forward", "median_forward", "worst_forward",
-                "best_lateral", "median_lateral", "worst_lateral"
-            ])
-        writer.writerow([
-            generation, best_fit, median_fit, worst_fit, pop_mean, pop_std,
-            best_forward, median_forward, worst_forward,
-            best_lateral, median_lateral, worst_lateral
-        ])
 import contextlib
 from typing import Any
 
@@ -120,8 +104,17 @@ console.log(f"Experiment started with SEED={SEED}, DEVICE={DEVICE}, PARALLEL={PA
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
-# def sigmoid(x):
-#         return 1.0 / (1.0 + np.exp(-x))
+def log_generation_stats(filename, generation, pop_mean, pop_std, pop_max):
+    file_exists = Path(filename).exists()
+    with open(filename, "a", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([
+                "generation", "mean_fitness", "stdev_fitness", "max_fitness"
+            ])
+        writer.writerow([
+            generation, pop_mean, pop_std, pop_max
+        ])
 
 def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
     num_joints = model.nu 
@@ -434,12 +427,12 @@ def evaluate_pop(pop: Population, pool=None) -> Population:
             fitness_values = pool.map(evaluate_individual_isolated, genotypes)
             for ind, fitness_val in zip(to_eval, fitness_values):
                 ind.fitness = fitness_val
-                ind.requires_eval = False
+                ind.requires_eval = CONTROLLER == "random"
     else:
         for ind in pop:
             if ind.requires_eval:
                 ind.fitness = evaluate_ind(ind)
-                ind.requires_eval = False
+                ind.requires_eval = CONTROLLER == "random"
     return pop
 
 def evaluate_individual_isolated(genotype_list: list) -> float:
@@ -497,7 +490,7 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
     plt.xlim(-max_range, max_range)
     plt.ylim(-max_range, max_range)
 
-    plt.show(block=False)
+    # plt.show(block=False)
     plt.draw()
     plt.pause(0.1)
 
@@ -771,14 +764,20 @@ def evolve_using_ariel_ec(run_id=None):
         pop: Population = create_population(total_params=total_params, pop_size=POP_SIZE, pool=pool)
         pop = evaluate_pop(pop, pool=pool)
 
-        ops = [
-            EAPoolStep("evaluation", evaluate_pop, pool=pool),
-            EAStep("parent_selection", parent_selection),
-            EAPoolStep("crossover", crossover_parallel, pool=pool),
-            EAPoolStep("mutation",  mutation, pool=pool),
-            EAPoolStep("evaluation", evaluate_pop, pool=pool),
-            EAStep("survivor_selection", survivor_selection)
-        ]
+
+        if CONTROLLER == "numpy_nn":
+            ops = [
+                EAPoolStep("evaluation", evaluate_pop, pool=pool),
+                EAStep("parent_selection", parent_selection),
+                EAPoolStep("crossover", crossover_parallel, pool=pool),
+                EAPoolStep("mutation",  mutation, pool=pool),
+                EAPoolStep("evaluation", evaluate_pop, pool=pool),
+                EAStep("survivor_selection", survivor_selection)
+            ]
+        else:
+            ops = [
+                EAPoolStep("evaluation", evaluate_pop, pool=pool)
+            ]
 
         # initialize EA
         ea = EA(
@@ -799,8 +798,13 @@ def evolve_using_ariel_ec(run_id=None):
         interactive_mode = INTERACTIVE_MODE
 
 
-        progress = Progress()
-        progress.start()
+        global MULTI_RUN_OPTIONS
+        if MULTI_RUN_OPTIONS and MULTI_RUN_OPTIONS['progress'] is not None:
+            progress = MULTI_RUN_OPTIONS['progress']
+            multi_task = MULTI_RUN_OPTIONS['task']
+        else:
+            progress = Progress()
+            progress.start()
         gen = 0
 
         try:
@@ -819,39 +823,29 @@ def evolve_using_ariel_ec(run_id=None):
                 for _ in range(batch_size):
                     ea.step()
                     gen += 1
+                    if DETAILED_LOGGING:
+                        ea.fetch_population() # fetch before iterating to ensure correct process-binding
+                        pop_fitness = [ind.fitness for ind in ea.population]
+                        pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
+                        pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
+                        pop_max = float(np.max(pop_fitness)) if pop_fitness else 0.0
+
+                        log_generation_stats(
+                            filename=stats_csv_path,
+                            generation=gen,
+                            pop_mean=pop_mean,
+                            pop_std=pop_std,
+                            pop_max=pop_max,
+                        )
                     if interactive_mode or DETAILED_LOGGING:
                         progress.update(inner_loop, advance=1)
                         progress.update(outer_loop, completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None, description=f"Evolution Progress - current best {ea.get_solution('best', only_alive=False).fitness:.5f}")
+                        if MULTI_RUN_OPTIONS and MULTI_RUN_OPTIONS['progress'] is not None:
+                            progress.update(multi_task, advance=1)
+                
                 best_individual: Individual = ea.get_solution('best', only_alive=False)
-                median_individual: Individual = ea.get_solution('median', only_alive=False)
-                worst_individual: Individual = ea.get_solution('worst', only_alive=False)
-                pop_fitness = [ind.fitness for ind in ea.population if hasattr(ind, 'fitness')]
-                pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
-                pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
-
                 best_weights = np.array(best_individual.genotype, dtype=np.float32)
-                median_weights = np.array(median_individual.genotype, dtype=np.float32)
-                worst_weights = np.array(worst_individual.genotype, dtype=np.float32)
-
-                best_history = run_bot_session(best_weights, method="headless")
-                median_history = run_bot_session(median_weights, method="headless")
-                worst_history = run_bot_session(worst_weights, method="headless")
-
-                log_generation_stats(
-                    filename=stats_csv_path,
-                    generation=gen,
-                    best_fit=best_individual.fitness,
-                    median_fit=median_individual.fitness,
-                    worst_fit=worst_individual.fitness,
-                    pop_mean=pop_mean,
-                    pop_std=pop_std,
-                    best_forward=calc_forward_distance(best_history),
-                    median_forward=calc_forward_distance(median_history),
-                    worst_forward=calc_forward_distance(worst_history),
-                    best_lateral=calc_lateral_distance(best_history),
-                    median_lateral=calc_lateral_distance(median_history),
-                    worst_lateral=calc_lateral_distance(worst_history),
-                )
+                
                 if RECORD_BATCH or interactive_mode:
                     best_history = run_bot_session(best_weights, method="headless")
                 if RECORD_BATCH:
@@ -892,7 +886,10 @@ def evolve_using_ariel_ec(run_id=None):
 
 
         finally:
-            progress.stop()
+            if MULTI_RUN_OPTIONS and MULTI_RUN_OPTIONS['progress'] is not None:
+                pass
+            else:
+                progress.stop()
     finally:
         if pool:
             pool.close()
@@ -994,9 +991,15 @@ def simple_multi_run():
     exp_worst_lateral_median = []
 
     runs = 3
-    fitness_modes = ["lateral_adjusted", "lateral_median"]
+    fitness_modes = ["lateral_adjusted"]
     global CONTROLLER
     global FITNESS_MODE
+    global MULTI_RUN_OPTIONS
+    global SIM_STEPS
+    MULTI_RUN_OPTIONS = {}
+    multirun_progress = Progress()
+    MULTI_RUN_OPTIONS['progress'] = multirun_progress
+    multirun_progress.start()
 
     def run_baseline(fitness_mode):
         # Run EA loop with controller set to 'random' (weights ignored)
@@ -1004,10 +1007,15 @@ def simple_multi_run():
         FITNESS_MODE = fitness_mode
         bests, medians, worsts = [], [], []
         global CONTROLLER
+        global MULTI_RUN_OPTIONS
+        multi_task = MULTI_RUN_OPTIONS.get('task', None)
+        multirun_progress = MULTI_RUN_OPTIONS.get('progress', None)
+
         for run_idx in range(runs):
             CONTROLLER = "random"
             run_label = f"Run {run_idx+1}/3 | Baseline | Fitness: {fitness_mode}"
             console.rule(f"[cyan] {run_label}")
+            multirun_progress.update(multi_task, description=f"Multi-Run - Baseline run {run_idx+1}/3 for FITNESS_MODE={mode}")
             print(f"[BASELINE] {run_label}")
             ea = evolve_using_ariel_ec()
             best = ea.get_solution("best", only_alive=False)
@@ -1024,73 +1032,82 @@ def simple_multi_run():
         CONTROLLER = "numpy_nn"  # Restore for experiment runs
         return bests, medians, worsts
 
-    for mode in fitness_modes:
-        # Baseline runs
-        console.rule(f"[blue] Baseline runs for FITNESS_MODE={mode}")
-        bests, medians, worsts = run_baseline(mode)
-        if mode == "lateral_adjusted":
-            baseline_best_lateral_adjusted.extend(bests)
-            baseline_median_lateral_adjusted.extend(medians)
-            baseline_worst_lateral_adjusted.extend(worsts)
-        else:
-            baseline_best_lateral_median.extend(bests)
-            baseline_median_lateral_median.extend(medians)
-            baseline_worst_lateral_median.extend(worsts)
+    try:
 
+        multi_task = multirun_progress.add_task("Overall Multi-Run Progress", total=len(fitness_modes) * runs * MAX_GENERATIONS)
+        MULTI_RUN_OPTIONS['task'] = multi_task
 
-        # Evolutionary runs
-        for run_idx in range(runs):
-            FITNESS_MODE = mode
-            run_label = f"Run {run_idx+1}/3 | Experiment | Fitness: {FITNESS_MODE}"
-            console.rule(f"[magenta] {run_label}")
-            print(f"[EXPERIMENT] {run_label}")
-            ea = evolve_using_ariel_ec()
-            best = ea.get_solution("best", only_alive=False)
-            median = ea.get_solution("median", only_alive=False)
-            worst = ea.get_solution("worst", only_alive=False)
+        for mode in fitness_modes:
+            # Baseline runs
+            console.rule(f"[blue] Baseline runs for FITNESS_MODE={mode}")
+            bests, medians, worsts = run_baseline(mode)
             if mode == "lateral_adjusted":
-                exp_best_lateral_adjusted.append(best.fitness)
-                exp_median_lateral_adjusted.append(median.fitness)
-                exp_worst_lateral_adjusted.append(worst.fitness)
+                baseline_best_lateral_adjusted.extend(bests)
+                baseline_median_lateral_adjusted.extend(medians)
+                baseline_worst_lateral_adjusted.extend(worsts)
             else:
-                exp_best_lateral_median.append(best.fitness)
-                exp_median_lateral_median.append(median.fitness)
-                exp_worst_lateral_median.append(worst.fitness)
-            del best, median, worst
-            plt.close('all')
-            console.rule(f"[magenta] Completed {run_label}")
-            time.sleep(5)
-            del ea
-            time.sleep(5)
-            gc.collect()
-            time.sleep(5)
+                baseline_best_lateral_median.extend(bests)
+                baseline_median_lateral_median.extend(medians)
+                baseline_worst_lateral_median.extend(worsts)
 
-    # Sort results for easier comparison
-    for fit_list in [baseline_best_lateral_adjusted, baseline_median_lateral_adjusted, baseline_worst_lateral_adjusted,
-                     baseline_best_lateral_median, baseline_median_lateral_median, baseline_worst_lateral_median,
-                     exp_best_lateral_adjusted, exp_median_lateral_adjusted, exp_worst_lateral_adjusted,
-                     exp_best_lateral_median, exp_median_lateral_median, exp_worst_lateral_median]:
-        fit_list.sort(reverse=True)
 
-    console.rule("[green] All runs complete. Summary of results:")
+            # Evolutionary runs
+            for run_idx in range(runs):
+                FITNESS_MODE = mode
+                run_label = f"Run {run_idx+1}/3 | Experiment | Fitness: {FITNESS_MODE}"
+                console.rule(f"[magenta] {run_label}")
+                multirun_progress.update(multi_task, description=f"Multi-Run - Experiment run {run_idx+1}/3 for FITNESS_MODE={mode}")
+                print(f"[EXPERIMENT] {run_label}")
+                ea = evolve_using_ariel_ec()
+                best = ea.get_solution("best", only_alive=False)
+                median = ea.get_solution("median", only_alive=False)
+                worst = ea.get_solution("worst", only_alive=False)
+                if mode == "lateral_adjusted":
+                    exp_best_lateral_adjusted.append(best.fitness)
+                    exp_median_lateral_adjusted.append(median.fitness)
+                    exp_worst_lateral_adjusted.append(worst.fitness)
+                else:
+                    exp_best_lateral_median.append(best.fitness)
+                    exp_median_lateral_median.append(median.fitness)
+                    exp_worst_lateral_median.append(worst.fitness)
+                del best, median, worst
+                plt.close('all')
+                console.rule(f"[magenta] Completed {run_label}")
+                time.sleep(5)
+                del ea
+                time.sleep(5)
+                gc.collect()
+                time.sleep(5)
 
-    console.log(f"Baseline (Lateral Adjusted) - Best: {baseline_best_lateral_adjusted}")
-    console.log(f"Baseline (Lateral Adjusted) - Median: {baseline_median_lateral_adjusted}")
-    console.log(f"Baseline (Lateral Adjusted) - Worst: {baseline_worst_lateral_adjusted}")
+        # Sort results for easier comparison
+        for fit_list in [baseline_best_lateral_adjusted, baseline_median_lateral_adjusted, baseline_worst_lateral_adjusted,
+                        baseline_best_lateral_median, baseline_median_lateral_median, baseline_worst_lateral_median,
+                        exp_best_lateral_adjusted, exp_median_lateral_adjusted, exp_worst_lateral_adjusted,
+                        exp_best_lateral_median, exp_median_lateral_median, exp_worst_lateral_median]:
+            fit_list.sort(reverse=True)
 
-    console.log(f"Baseline (Lateral Median) - Best: {baseline_best_lateral_median}")
-    console.log(f"Baseline (Lateral Median) - Median: {baseline_median_lateral_median}")
-    console.log(f"Baseline (Lateral Median) - Worst: {baseline_worst_lateral_median}")
+        console.rule("[green] All runs complete. Summary of results:")
 
-    console.log(f"Experiment (Lateral Adjusted) - Best: {exp_best_lateral_adjusted}")
-    console.log(f"Experiment (Lateral Adjusted) - Median: {exp_median_lateral_adjusted}")
-    console.log(f"Experiment (Lateral Adjusted) - Worst: {exp_worst_lateral_adjusted}")
+        console.log(f"Baseline (Lateral Adjusted) - Best: {baseline_best_lateral_adjusted}")
+        console.log(f"Baseline (Lateral Adjusted) - Median: {baseline_median_lateral_adjusted}")
+        console.log(f"Baseline (Lateral Adjusted) - Worst: {baseline_worst_lateral_adjusted}")
 
-    console.log(f"Experiment (Lateral Median) - Best: {exp_best_lateral_median}")
-    console.log(f"Experiment (Lateral Median) - Median: {exp_median_lateral_median}")
-    console.log(f"Experiment (Lateral Median) - Worst: {exp_worst_lateral_median}")
+        console.log(f"Baseline (Lateral Median) - Best: {baseline_best_lateral_median}")
+        console.log(f"Baseline (Lateral Median) - Median: {baseline_median_lateral_median}")
+        console.log(f"Baseline (Lateral Median) - Worst: {baseline_worst_lateral_median}")
 
-    console.rule("[green] End of multi-run summary.")
+        console.log(f"Experiment (Lateral Adjusted) - Best: {exp_best_lateral_adjusted}")
+        console.log(f"Experiment (Lateral Adjusted) - Median: {exp_median_lateral_adjusted}")
+        console.log(f"Experiment (Lateral Adjusted) - Worst: {exp_worst_lateral_adjusted}")
+
+        console.log(f"Experiment (Lateral Median) - Best: {exp_best_lateral_median}")
+        console.log(f"Experiment (Lateral Median) - Median: {exp_median_lateral_median}")
+        console.log(f"Experiment (Lateral Median) - Worst: {exp_worst_lateral_median}")
+
+        console.rule("[green] End of multi-run summary.")
+    finally:
+        multirun_progress.stop()
+        MULTI_RUN_OPTIONS = None
 
 if __name__ == "__main__":
     simple_multi_run()
