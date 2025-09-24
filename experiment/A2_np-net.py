@@ -44,7 +44,7 @@ CONTROLLER = "numpy_nn"  # Options: "random", "numpy_nn"
 SEGMENT_LENGTH = 250
 POP_SIZE = 100
 MAX_GENERATIONS = 250
-TIME_LIMIT = 60 * 45  # max run time in seconds
+TIME_LIMIT = -1  # max run time in seconds
 HIDDEN_SIZE = 8
 SIM_STEPS = 10000  # running at 500 steps per second
 OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
@@ -75,6 +75,9 @@ RNG = np.random.default_rng(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
 
+STATS_CSV_PATH = Path(__file__).parent / "output" / "logs" / f"gen_stats_{CONTROLLER}_{FITNESS_MODE}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
+STATS_CSV_PATH.parent.mkdir(exist_ok=True)
+
 
 
 # Custom class to log to both terminal and file
@@ -104,16 +107,16 @@ console.log(f"Experiment started with SEED={SEED}, DEVICE={DEVICE}, PARALLEL={PA
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking
 
-def log_generation_stats(filename, generation, pop_mean, pop_std, pop_max):
+def log_generation_stats(filename, pop_mean, pop_std, pop_max):
     file_exists = Path(filename).exists()
     with open(filename, "a", newline='') as csvfile:
         writer = csv.writer(csvfile)
         if not file_exists:
             writer.writerow([
-                "generation", "mean_fitness", "stdev_fitness", "max_fitness"
+                "mean_fitness", "stdev_fitness", "max_fitness"
             ])
         writer.writerow([
-            generation, pop_mean, pop_std, pop_max
+           pop_mean, pop_std, pop_max
         ])
 
 def random_controller_move(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
@@ -421,18 +424,21 @@ def evaluate_ind(ind: Individual) -> float:
 
 def evaluate_pop(pop: Population, pool=None) -> Population:
     if PARALLEL and PARALLEL_CORES > 1 and pool is not None:
-        to_eval = [ind for ind in pop if ind.requires_eval]
+        if CONTROLLER == "random":
+            to_eval = pop
+        else:
+            to_eval = [ind for ind in pop if ind.requires_eval]
         if to_eval:
             genotypes = [ind.genotype for ind in to_eval]
             fitness_values = pool.map(evaluate_individual_isolated, genotypes)
             for ind, fitness_val in zip(to_eval, fitness_values):
                 ind.fitness = fitness_val
-                ind.requires_eval = CONTROLLER == "random"
+                ind.requires_eval = False
     else:
         for ind in pop:
-            if ind.requires_eval:
+            if ind.requires_eval or CONTROLLER == "random":
                 ind.fitness = evaluate_ind(ind)
-                ind.requires_eval = CONTROLLER == "random"
+                ind.requires_eval = False
     return pop
 
 def evaluate_individual_isolated(genotype_list: list) -> float:
@@ -719,13 +725,26 @@ def survivor_selection(population: Population) -> Population:
     return population
 
 
-def evolve_using_ariel_ec(run_id=None):    
+def log_stats(population: Population) -> Population:
+    print(f"popsize: {len(population)}")
+    pop_fitness = [ind.fitness for ind in population]
+    pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
+    pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
+    pop_max = float(np.max(pop_fitness)) if pop_fitness else 0.0
+
+    log_generation_stats(
+        filename=STATS_CSV_PATH,
+        pop_mean=pop_mean,
+        pop_std=pop_std,
+        pop_max=pop_max,
+    )
+    # console.log(f"Generation mean fitness = {pop_mean:.5f}, std = {pop_std:.5f}, max = {pop_max:.5f}")
+    return population
+
+
+def evolve_using_ariel_ec():    
 
     console.rule("[green]Starting Evolutionary Run")
-    if run_id is None:
-        run_id = f"{int(time.time())}"
-    stats_csv_path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{CONTROLLER}_{FITNESS_MODE}_run{run_id}.csv"
-    stats_csv_path.parent.mkdir(exist_ok=True)
 
     # input size is the number of position sensors (qpos)
     model, data, to_track = initialize_world_and_robot()
@@ -764,6 +783,7 @@ def evolve_using_ariel_ec(run_id=None):
         pop: Population = create_population(total_params=total_params, pop_size=POP_SIZE, pool=pool)
         pop = evaluate_pop(pop, pool=pool)
 
+        print(f"Controller: {CONTROLLER}, Fitness Mode: {FITNESS_MODE}, Population Size: {len(pop)}, Total Params: {total_params}")
 
         if CONTROLLER == "numpy_nn":
             ops = [
@@ -772,12 +792,16 @@ def evolve_using_ariel_ec(run_id=None):
                 EAPoolStep("crossover", crossover_parallel, pool=pool),
                 EAPoolStep("mutation",  mutation, pool=pool),
                 EAPoolStep("evaluation", evaluate_pop, pool=pool),
-                EAStep("survivor_selection", survivor_selection)
+                EAStep("survivor_selection", survivor_selection),
+                EAStep("log_stats", log_stats),
             ]
         else:
             ops = [
-                EAPoolStep("evaluation", evaluate_pop, pool=pool)
+                EAPoolStep("evaluation", evaluate_pop, pool=pool),
+                EAStep("log_stats", log_stats),
             ]
+
+        print(f"Using operations: {[op.name for op in ops]}")
 
         # initialize EA
         ea = EA(
@@ -823,20 +847,6 @@ def evolve_using_ariel_ec(run_id=None):
                 for _ in range(batch_size):
                     ea.step()
                     gen += 1
-                    if DETAILED_LOGGING:
-                        ea.fetch_population() # fetch before iterating to ensure correct process-binding
-                        pop_fitness = [ind.fitness for ind in ea.population]
-                        pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
-                        pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
-                        pop_max = float(np.max(pop_fitness)) if pop_fitness else 0.0
-
-                        log_generation_stats(
-                            filename=stats_csv_path,
-                            generation=gen,
-                            pop_mean=pop_mean,
-                            pop_std=pop_std,
-                            pop_max=pop_max,
-                        )
                     if interactive_mode or DETAILED_LOGGING:
                         progress.update(inner_loop, advance=1)
                         progress.update(outer_loop, completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None, description=f"Evolution Progress - current best {ea.get_solution('best', only_alive=False).fitness:.5f}")
