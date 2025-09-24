@@ -1,4 +1,21 @@
 # Third-party libraries
+import csv
+
+def log_generation_stats(filename, generation, best_fit, median_fit, worst_fit, pop_mean, pop_std, best_forward, median_forward, worst_forward, best_lateral, median_lateral, worst_lateral):
+    file_exists = Path(filename).exists()
+    with open(filename, "a", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([
+                "generation", "best_fitness", "median_fitness", "worst_fitness", "pop_mean", "pop_std",
+                "best_forward", "median_forward", "worst_forward",
+                "best_lateral", "median_lateral", "worst_lateral"
+            ])
+        writer.writerow([
+            generation, best_fit, median_fit, worst_fit, pop_mean, pop_std,
+            best_forward, median_forward, worst_forward,
+            best_lateral, median_lateral, worst_lateral
+        ])
 import contextlib
 from typing import Any
 
@@ -709,9 +726,13 @@ def survivor_selection(population: Population) -> Population:
     return population
 
 
-def evolve_using_ariel_ec():    
+def evolve_using_ariel_ec(run_id=None):    
 
     console.rule("[green]Starting Evolutionary Run")
+    if run_id is None:
+        run_id = f"{int(time.time())}"
+    stats_csv_path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{CONTROLLER}_{FITNESS_MODE}_run{run_id}.csv"
+    stats_csv_path.parent.mkdir(exist_ok=True)
 
     # input size is the number of position sensors (qpos)
     model, data, to_track = initialize_world_and_robot()
@@ -802,7 +823,35 @@ def evolve_using_ariel_ec():
                         progress.update(inner_loop, advance=1)
                         progress.update(outer_loop, completed=gen if MAX_GENERATIONS > 0 else (time.time() - evolution_start_time) // 60 if TIME_LIMIT > 0 else None, description=f"Evolution Progress - current best {ea.get_solution('best', only_alive=False).fitness:.5f}")
                 best_individual: Individual = ea.get_solution('best', only_alive=False)
+                median_individual: Individual = ea.get_solution('median', only_alive=False)
+                worst_individual: Individual = ea.get_solution('worst', only_alive=False)
+                pop_fitness = [ind.fitness for ind in ea.population if hasattr(ind, 'fitness')]
+                pop_mean = float(np.mean(pop_fitness)) if pop_fitness else 0.0
+                pop_std = float(np.std(pop_fitness)) if pop_fitness else 0.0
+
                 best_weights = np.array(best_individual.genotype, dtype=np.float32)
+                median_weights = np.array(median_individual.genotype, dtype=np.float32)
+                worst_weights = np.array(worst_individual.genotype, dtype=np.float32)
+
+                best_history = run_bot_session(best_weights, method="headless")
+                median_history = run_bot_session(median_weights, method="headless")
+                worst_history = run_bot_session(worst_weights, method="headless")
+
+                log_generation_stats(
+                    filename=stats_csv_path,
+                    generation=gen,
+                    best_fit=best_individual.fitness,
+                    median_fit=median_individual.fitness,
+                    worst_fit=worst_individual.fitness,
+                    pop_mean=pop_mean,
+                    pop_std=pop_std,
+                    best_forward=calc_forward_distance(best_history),
+                    median_forward=calc_forward_distance(median_history),
+                    worst_forward=calc_forward_distance(worst_history),
+                    best_lateral=calc_lateral_distance(best_history),
+                    median_lateral=calc_lateral_distance(median_history),
+                    worst_lateral=calc_lateral_distance(worst_history),
+                )
                 if RECORD_BATCH or interactive_mode:
                     best_history = run_bot_session(best_weights, method="headless")
                 if RECORD_BATCH:
