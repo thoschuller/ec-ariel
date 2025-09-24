@@ -41,9 +41,12 @@ from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
 import random
 
-
-# === experiment constants/settings ===
 SIM_WORLD = SimpleFlatWorld # other options should be used with care, as they are randomly generated and require changing the evaluation to evaluate the whole population at every step
+
+
+# === experiment settings ===
+global SEED
+SEED = 42 # A specific seed is set here for reproducibility of results
 CONTROLLER = "numpy_nn"  # Options: "random", "numpy_nn"
 SEGMENT_LENGTH = 250 # step count over which the median distances are calculated and total distance is normalized
 POP_SIZE = 100 # population size
@@ -56,17 +59,18 @@ OUTPUT_DELTA = 0.05 # change in output per step, to smooth out controls
 NUM_HIDDEN_LAYERS = 1 # the number of hidden layers used in the numpy neural network
 FITNESS_MODE = "lateral_adjusted"  # Options: "segment_median", "simple", "modern", "lateral_adjusted", "lateral_median"
 UNIFORM_CROSSOVER = False  # If True, use uniform crossover; if False, use one-point crossover
+LATERAL_PENALTY_FACTOR = 0.1 # factor to multiply lateral distance with before subtracting from forward distance for fitness
+
+
+# === other settings ===
+# IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 INTERACTIVE_MODE = False  # If True, show and ask every X generations; if False, run to max
 PARALLEL = True  # If True, evaluate individuals in parallel using multiple CPU cores
-# IMPORTANT NOTE: in interactive mode, it is required to close the viewer window to continue running
 RECORD_LAST = False  # If True, record a video of the last individual
 BATCH_SIZE = 25 # The number of individuals between recordings or interactive prompts
 RECORD_BATCH = False  # If True, record a video of the best individual every BATCH_SIZE generations
 DETAILED_LOGGING = True  # If True, log detailed fitness components each generation
 
-
-UPRIGHT_FACTOR = 0  # Set to 0 to ignore vertical orientation
-LATERAL_PENALTY_FACTOR = 0.1 # factor to multiply lateral distance with before subtracting from forward distance for fitness
 
 
 # NOTE: cuda accelleration is currently not supported for this script
@@ -74,8 +78,6 @@ LATERAL_PENALTY_FACTOR = 0.1 # factor to multiply lateral distance with before s
 DEVICE = "cpu"
 PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # leave one core free for the system itself
 
-global SEED
-SEED = 42 # A specific seed is set here for reproducibility of results
 global RNG
 RNG = np.random.default_rng(SEED)
 np.random.seed(SEED)
@@ -515,6 +517,8 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
 
     # plt.show(block=False)
     plt.draw()
+    if INTERACTIVE_MODE:
+        plt.show(block=False)
     plt.pause(0.1)
 
     if save:
@@ -875,7 +879,7 @@ def evolve_using_ariel_ec():
                 if RECORD_BATCH:
                     run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": FITNESS_MODE, "fitness": best_individual.fitness})
                     save_genotype(best_weights, best_individual.fitness)
-                    show_qpos_history(best_history)
+                    show_qpos_history(best_history, save=True)
                 if interactive_mode:
                     progress.stop()
                     console.rule(f"Generation {gen} - Best Fitness: {best_individual.fitness:.5f}")
@@ -969,7 +973,10 @@ def evolve_using_ariel_ec():
 
     return ea
 
-def save_genotype(weights: np.ndarray, fitness: float) -> None:
+def save_genotype(weights: np.ndarray, fitness: float = 0.0) -> None:
+    """
+    Saves a genotype (numpy network weights) to a .npy file.
+    """
     output_path = Path(__file__).parent / "output" / "genotypes"
     output_path.mkdir(exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -979,6 +986,9 @@ def save_genotype(weights: np.ndarray, fitness: float) -> None:
 
 
 def load_genotype(file_path: str) -> np.ndarray:
+    """
+    Loads a genotype (numpy network weights) from a .npy file.
+    """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Genotype file not found: {file_path}")
@@ -987,18 +997,28 @@ def load_genotype(file_path: str) -> np.ndarray:
     return weights
 
 def test_loaded_genotype(file_path: str) -> None:
+    """
+    Loads a genotype from file, evaluates its fitness, and runs it in viewer mode.
+    """
     weights = load_genotype(file_path)
     history = run_bot_session(weights, method="headless")
     fit = fitness(history)
     console.log(f"Tested loaded genotype fitness: {fit:.5f}")
-    run_bot_session(weights, method="viewer")
-    show_qpos_history(history)
+    if INTERACTIVE_MODE:
+        run_bot_session(weights, method="viewer")
+        show_qpos_history(history)
 
 def main():
     ea: EA = evolve_using_ariel_ec()
 
-
 def simple_multi_run():
+    """
+    Runs a matrix of experiments:
+    - Baseline (random controller) vs Evolutionary (numpy_nn controller)
+    - Fitness modes: lateral_adjusted, lateral_median
+    Each combination is run 3 times to gather statistics.
+    """
+
     # Results containers
     baseline_best_lateral_adjusted = []
     baseline_median_lateral_adjusted = []
