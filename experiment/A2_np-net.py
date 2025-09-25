@@ -2,6 +2,12 @@
 This is an evolutionary algorithm experiment using the Ariel framework.
 It evolves a population of numpy neural network weights to control a gecko robot.
 The evolution is based on two different fitness calculations, for which both an experiment and baseline evaluation are executed in threefold to compare their effectiveness.
+
+Written by;
+- Thomas Schuller
+- Maélis Chaulot-Talmon
+- Madalena Barceló
+- Hang Tran
 """
 
 # Third-party libraries
@@ -77,6 +83,8 @@ DETAILED_LOGGING = True  # If True, log detailed fitness components each generat
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
 PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # leave one core free for the system itself
+
+MULTI_RUN_OPTIONS = {}
 
 global RNG
 RNG = np.random.default_rng(SEED)
