@@ -1,3 +1,5 @@
+#type: ignore
+
 """
 This is an evolutionary algorithm experiment using the Ariel framework.
 It evolves a population of numpy neural network weights to control a gecko robot.
@@ -37,11 +39,9 @@ from typing import cast
 from ariel.utils.renderers import tracking_video_renderer
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
-from ariel.simulation.environments.crater_heightmap import CraterTerrainWorld
-from ariel.simulation.environments.simple_tilted_world import TiltedFlatWorld
 from ariel.ec.a000 import IntegerMutator
 from ariel.ec.a001 import Individual, JSONIterable
-from ariel.ec.a004 import EASettings, EAStep, EA, Population
+from ariel.ec.a004 import EAStep, EA, Population
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
@@ -82,7 +82,7 @@ DETAILED_LOGGING = True  # If True, log detailed fitness components each generat
 # NOTE: cuda accelleration is currently not supported for this script
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = "cpu"
-PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # leave one core free for the system itself
+PARALLEL_CORES = 1 if DEVICE == "cuda" or PARALLEL == False else multiprocessing.cpu_count()  # pyright: ignore[reportUnnecessaryComparison] # leave one core free for the system itself
 
 MULTI_RUN_OPTIONS = {}
 
@@ -102,13 +102,13 @@ STATS_CSV_PATH.parent.mkdir(exist_ok=True)
 
 # Double-log to file and terminal
 class DualWriter:
-    def __init__(self, *files):
-        self.files = files
-    def write(self, data):
+    def __init__(self, *files: Any) -> None:
+        self.files: tuple[Any, ...] = files
+    def write(self, data: str) -> None:
         for f in self.files:
             f.write(data)
             f.flush()
-    def flush(self):
+    def flush(self) -> None:
         for f in self.files:
             f.flush()
 
@@ -256,6 +256,8 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             viewer.launch(model, data)
         case "headless": # for evaluation-only sessions
             mujoco.mj_step(model, data, nstep=SIM_STEPS)
+        case _:
+            raise ValueError(f"Unknown method: {method}")
 
     mujoco.set_mjcb_control(None)
 
@@ -329,7 +331,7 @@ def calc_median_segment_forward_distance(history: list) -> float:
     if not history or len(history) < 2:
         return 0.0
     arr = np.asarray(history, dtype=np.float32)
-    x0, y0, _, yaw0 = arr[0]
+    _, _, _, yaw0 = arr[0]
     h0_perp = np.array([-np.sin(yaw0), np.cos(yaw0)])
     segment_forwards = []
     for i in range(0, len(arr), SEGMENT_LENGTH):
@@ -707,8 +709,8 @@ def crossover_parallel(population: Population, pool) -> Population:
 
 def mutate_individual(ind: Individual) -> Individual:
 
-    mutated = IntegerMutator.float_creep(
-        individual=cast("list[float]", ind.genotype),
+    mutated = IntegerMutator.integer_creep(
+        individual=cast("list[int]", ind.genotype),
         span=5,
         mutation_probability=0.5,
     )
@@ -1017,7 +1019,7 @@ def test_loaded_genotype(file_path: str) -> None:
         show_qpos_history(history)
 
 def main():
-    ea: EA = evolve_using_ariel_ec()
+    evolve_using_ariel_ec()
 
 def simple_multi_run():
     """
