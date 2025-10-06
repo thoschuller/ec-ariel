@@ -56,10 +56,10 @@ CONFIG = {
     "SEED": 42,
     "SEGMENT_LENGTH": 250,
     "POP_SIZE": 15,
-    "MAX_GENERATIONS": 100,
+    "MAX_GENERATIONS": 75,
     "TIME_LIMIT": 60*15, # expected duration is 7-8 minutes
     "HIDDEN_SIZE": 8,
-    "SIM_STEPS": 15000,
+    "DURATION": 15,
     "OUTPUT_DELTA": 0.05,
     "NUM_HIDDEN_LAYERS": 1,
     "FITNESS_MODE": "lateral_adjusted",
@@ -253,7 +253,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             tracking_video_renderer(
                 model,
                 data,
-                duration=10 + CONFIG['SIM_STEPS'] / 500,
+                duration=10 + CONFIG['DURATION'],
                 video_recorder=video_recorder,
             )
             mujoco.set_mjcb_control(None)
@@ -268,7 +268,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             except Exception:
                 # Fall back to a reasonable default timestep if unavailable
                 timestep = 0.002
-            duration_seconds = timestep * float(CONFIG['SIM_STEPS'])
+            duration_seconds = CONFIG["DURATION"]
             simple_runner(model, data, duration=duration_seconds)
         case _:
             raise ValueError(f"Unknown method: {method}")
@@ -418,6 +418,37 @@ def calc_median_segment_forward_towards_target(history: list, target: list | np.
     return float(np.median(segment_forwards)) if segment_forwards else 0.0
 
 
+def time_to_reach_target_seconds(history: list, target: list | np.ndarray) -> float | None:
+    """
+    Return the time in seconds when the trajectory first reaches or exceeds
+    the target along the start->target direction. If the target is never
+    reached return None. Uses CONFIG['DURATION'] to map history indices to
+    seconds.
+    """
+    if not history or len(history) < 2:
+        return None
+    arr = np.asarray(history, dtype=np.float32)
+    start = arr[0][:2]
+    target_xy = np.array(target, dtype=np.float32)[:2]
+    target_dir = _target_unit_direction_from_start(start, target_xy)
+    if target_dir is None:
+        return None
+    target_distance = float(np.linalg.norm(target_xy - start))
+    if target_distance == 0.0:
+        return 0.0
+    # iterate through history and find first index where projection >= target_distance
+    for i in range(len(arr)):
+        pos = arr[i][:2]
+        proj = float(np.dot(pos - start, target_dir))
+        if proj >= target_distance:
+            # map index to seconds using CONFIG['DURATION'] and number of samples
+            # use (len(arr)-1) as denominator so last index maps to full duration
+            denom = max(1, len(arr) - 1)
+            t = (i / denom) * float(CONFIG.get('DURATION', 0.0))
+            return float(t)
+    return None
+
+
 def calc_lateral_relative_to_target(history: list, target: list | np.ndarray) -> float:
     """
     Compute lateral deviation (perpendicular distance) of the final position
@@ -497,7 +528,7 @@ def calc_median_segment_distance(history: list) -> float:
 def fitness(history: list) -> float:
 
 
-    segment_count = CONFIG["SIM_STEPS"] / CONFIG["SEGMENT_LENGTH"]
+    segment_count = len(history) // CONFIG['SEGMENT_LENGTH']
     origin_distance = calc_origin_distance(history)
     normalized_origin_distance = origin_distance / segment_count if segment_count > 0 else 0.0
     # Allow override
@@ -534,11 +565,31 @@ def fitness(history: list) -> float:
             # of the general 'forward' direction. The chosen target is [5, 0, 0.5].
             if CONFIG["SIM_WORLD"] == OlympicArena:
                 target = np.array([5.0, 0.0, 0.5], dtype=np.float32)
+                # compute forward progress towards the fixed target and scale to a
+                # dimensionless fraction in [0, 1] where 0 == start and 1 == finish
                 forward_towards_target = calc_forward_towards_target(history, target)
-                normalized_forward_distance = forward_towards_target / segment_count if segment_count > 0 else 0.0
+                # safe start position fallback if history is empty
+                start_xy = np.array(history[0][:2]) if history else np.array([0.0, 0.0])
+                target_distance = float(np.linalg.norm(target[:2] - start_xy))
+                fraction_towards_target = (
+                    forward_towards_target / target_distance if target_distance > 0.0 else 0.0
+                )
+                # clamp to [0, 1] so reaching or passing the goal saturates at 1.0
+                fraction_towards_target = max(0.0, min(fraction_towards_target, 1.0))
+
+                # lateral deviation normalized by the same start->target distance
                 lateral_rel = calc_lateral_relative_to_target(history, target)
-                normalized_lateral_distance = abs(lateral_rel) / segment_count if segment_count > 0 else 0.0
-                fit = max(0.0, normalized_forward_distance - normalized_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"])
+                normalized_lateral_distance = (
+                    abs(lateral_rel) / target_distance if target_distance > 0.0 else 0.0
+                )
+
+                # final fitness: fraction toward goal minus scaled lateral penalty
+                fit = max(0.0, fraction_towards_target - normalized_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"])
+                # time bonus if target reached: bonus = max(0, 1 - (1/120) * t)
+                t_reach = time_to_reach_target_seconds(history, target)
+                if t_reach is not None:
+                    bonus = max(0.0, 1.0 - (1.0 / 120.0) * float(t_reach))
+                    fit = fit + bonus
             else:
                 forward_distance = calc_forward_distance(history)
                 normalized_forward_distance = forward_distance / segment_count if segment_count > 0 else 0.0
@@ -550,7 +601,21 @@ def fitness(history: list) -> float:
                 target = np.array([5.0, 0.0, 0.5], dtype=np.float32)
                 median_forward_distance = calc_median_segment_forward_towards_target(history, target)
                 median_lateral_distance = abs(calc_median_segment_lateral_relative_to_target(history, target))
-                fit = max(0.0, (median_forward_distance - median_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"]))
+                # normalize by start->target distance to produce a fraction in [0,1]
+                start_xy = np.array(history[0][:2]) if history else np.array([0.0, 0.0])
+                target_distance = float(np.linalg.norm(target[:2] - start_xy))
+                median_fraction = (
+                    median_forward_distance / target_distance if target_distance > 0.0 else 0.0
+                )
+                median_fraction = max(0.0, min(median_fraction, 1.0))
+                normalized_median_lateral = (
+                    median_lateral_distance / target_distance if target_distance > 0.0 else 0.0
+                )
+                fit = max(0.0, (median_fraction - normalized_median_lateral * CONFIG["LATERAL_PENALTY_FACTOR"]))
+                t_reach = time_to_reach_target_seconds(history, target)
+                if t_reach is not None:
+                    bonus = max(0.0, 1.0 - (1.0 / 120.0) * float(t_reach))
+                    fit = fit + bonus
             else:
                 median_forward_distance = calc_median_segment_forward_distance(history)
                 median_lateral_distance = abs(calc_median_segment_lateral_distance(history))
