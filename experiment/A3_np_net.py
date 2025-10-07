@@ -79,6 +79,8 @@ CONFIG = {
     "FITNESS_FUNCTION": None,  # Allow override
     "GECKO_BODY": None,        # Allow override
     "CONSOLE": None,
+    "MUTATION_PROBABILITY": 0.5,
+    "MUTATION_STDDEV": 0.1,
 }
 
 # --- Pool management --- #
@@ -136,13 +138,13 @@ log_file_path = Path(__file__).parent / "output" / "logs" / f"log-{time.strftime
 log_file_path.parent.mkdir(exist_ok=True)
 log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)  # line-buffered for immediate flush
 
-dual_writer = DualWriter(log_file, sys.stdout)
+dual_writer = DualWriter(sys.stdout, log_file)
 
 # Fancy console messages and progress bars
 if CONFIG["CONSOLE"] is None:
     install()
-    console = Console(file=dual_writer, emoji=False, markup=False)
-    # console = Console()
+    # console = Console(file=dual_writer, emoji=False, markup=False)
+    console = Console()
     CONFIG["CONSOLE"] = console
 else:
     console = cast(Console, CONFIG["CONSOLE"])
@@ -862,7 +864,7 @@ def mutate_float(
     rng = CONFIG['RNG']
     for i in range(len(mutated)):
         if rng.random() < mutation_probability:
-            mutated[i] += rng.normalvariate(0, stddev)
+            mutated[i] += rng.normal(0, stddev)
             mutated[i] = max(min_val, min(max_val, mutated[i]))
     return mutated
 
@@ -873,7 +875,7 @@ def mutate_individual(ind: Individual) -> Individual:
         mutation_probability=CONFIG['MUTATION_PROBABILITY'],
         min_val=-1.0,
         max_val=1.0,
-        stddev=0.1,
+        stddev=CONFIG['MUTATION_STDDEV'],
     )
     ind.genotype = mutated
     ind.tags = {'mut': False}
