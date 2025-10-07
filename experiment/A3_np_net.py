@@ -208,7 +208,7 @@ def initialize_world_and_robot():
     model = world.spec.compile()
     data = mujoco.MjData(model)
     # geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    mj.mj_resetData(model, data)
+    mujoco.mj_resetData(model, data)
     return model, data, world
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> Tracker:
