@@ -41,7 +41,6 @@ from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.simulation.environments.olympic_arena import OlympicArena
 from ariel.utils.runners import simple_runner
-from ariel.ec.a000 import IntegerMutator
 from ariel.ec.a001 import Individual, JSONIterable
 from ariel.ec.a004 import EAStep, EA, Population
 # import prebuilt robot phenotypes
@@ -708,8 +707,8 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
         console.log(f"Plot saved to {filename}")
 
 def create_individual(total_params: int) -> Individual:
-    # Create a random individual with weights in [-1, 1]
-    genotype = np.random.uniform(-1.0, 1.0, size=total_params).astype(np.float32)
+    # Create a random individual with weights in [-0.75, 0.75]
+    genotype = np.random.uniform(-0.75, 0.75, size=total_params).astype(np.float32)
     ind = Individual()
     ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
     ind.requires_eval = True
@@ -852,12 +851,29 @@ def crossover_parallel(population: Population, pool) -> Population:
             pass
     return population
 
+def mutate_float(
+    individual: list[float],
+    mutation_probability: float = 0.5,
+    min_val: float = -1.0,
+    max_val: float = 1.0,
+    stddev: float = 0.1,
+) -> list[float]:
+    mutated = individual.copy()
+    rng = CONFIG['RNG']
+    for i in range(len(mutated)):
+        if rng.random() < mutation_probability:
+            mutated[i] += rng.normalvariate(0, stddev)
+            mutated[i] = max(min_val, min(max_val, mutated[i]))
+    return mutated
+
 def mutate_individual(ind: Individual) -> Individual:
 
-    mutated = IntegerMutator.integer_creep(
-        individual=cast("list[int]", ind.genotype),
-        span=5,
-        mutation_probability=0.5,
+    mutated = mutate_float(
+        individual=cast("list[float]", ind.genotype),
+        mutation_probability=CONFIG['MUTATION_PROBABILITY'],
+        min_val=-1.0,
+        max_val=1.0,
+        stddev=0.1,
     )
     ind.genotype = mutated
     ind.tags = {'mut': False}
