@@ -58,7 +58,7 @@ CONFIG = {
     "SIM_WORLD": OlympicArena,
     "SEED": 42,
     "SEGMENT_LENGTH": 250,
-    "POP_SIZE": 25,
+    "POP_SIZE": 40,
     "MAX_GENERATIONS": 60,
     "TIME_LIMIT": 60*15, # expected duration is 7-8 minutes
     "HIDDEN_SIZE": 8,
@@ -76,8 +76,7 @@ CONFIG = {
     "RECORD_BATCH": True,
     "DETAILED_LOGGING": True,
     "DEVICE": "cpu",
-    "PARALLEL_CORES": 5,
-    # "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
+    "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
     "MULTI_RUN_OPTIONS": {},
     "MULTI_EVAL_RUNS": 1,
     "RNG": np.random.default_rng(42),
@@ -207,7 +206,7 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     for i in range(CONFIG["NUM_HIDDEN_LAYERS"]):
         x = np.tanh(np.dot(x, ws[i]))
     outputs = np.tanh(np.dot(x, ws[-1]))
-    outputs = outputs * np.pi  # Scale to [-pi, pi] for faster movement
+    outputs = outputs * np.pi * 0.5  # Scale to [-0.5 * pi, 0.5 * pi]
     
     return outputs
 
