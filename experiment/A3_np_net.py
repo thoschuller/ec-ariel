@@ -1027,6 +1027,7 @@ def evolve_using_ariel_ec(
                 if CONFIG["RECORD_BATCH"] or interactive_mode:
                     best_history = run_bot_session(best_weights, method="headless")
                 if CONFIG["RECORD_BATCH"]:
+                    console.log(f"Recording best individual of generation {gen} with fitness {best_individual.fitness:.5f}")
                     run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": CONFIG["FITNESS_MODE"], "fitness": best_individual.fitness})
                     save_genotype(best_weights, best_individual.fitness)
                     show_qpos_history(best_history, save=True)
