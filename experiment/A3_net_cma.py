@@ -779,9 +779,9 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
 
     # Plot trajectory on background
     background_axis.plot(x0, y0, "kx", markersize=10, label="[0, 0, 0]")
-    background_axis.plot(xc, yc, "go", markersize=8, label="Start")
-    background_axis.plot(pos_data_pixel[:, 0], pos_data_pixel[:, 1], "b-", linewidth=2, label="Path")
-    background_axis.plot(pos_data_pixel[-1, 0], pos_data_pixel[-1, 1], "ro", markersize=8, label="End")
+    background_axis.plot(pos_data_pixel[:, 1], pos_data_pixel[:, 0], "b-", linewidth=2, label="Path")
+    background_axis.plot(yc, xc, "go", markersize=8, label="Start")  # Note: xc and yc swapped here too
+    background_axis.plot(pos_data_pixel[-1, 1], pos_data_pixel[-1, 0], "ro", markersize=8, label="End")
 
     # Add labels and title with fitness information
     background_axis.set_xlabel("X Position (pixels)")
