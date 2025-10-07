@@ -45,7 +45,6 @@ from ariel.ec.a001 import Individual, JSONIterable
 from ariel.ec.a004 import EAStep, EA, Population
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
-from ariel.utils.tracker import Tracker
 
 import random
 
@@ -173,7 +172,7 @@ def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
     return math.atan2(R[1, 0], R[0, 0])  # Z-up convention
 
 
-def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: np.ndarray, input_size, hidden_size, output_size) -> None:
+def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
     # `weights` is expected to be a flat numpy array of parameters (float)
 
     # Dynamically unpack weights for multiple hidden layers
@@ -191,6 +190,9 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     outputs = np.tanh(np.dot(x, ws[-1]))
     outputs = outputs * (np.pi / 2)  # Scale to [-pi/2, pi/2]
     # Return outputs for Controller class
+    pos = to_track[0].xpos.copy()
+    yaw = yaw_from_xmat(to_track[0].xmat.copy())
+    history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))
     return outputs
 
 
@@ -208,9 +210,10 @@ def initialize_world_and_robot():
     model = world.spec.compile()
     data = mujoco.MjData(model)
     geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    return model, data
+    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
+    return model, data, to_track
 
-def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> Tracker:
+def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
     """
     Run a single simulation session with given weights and method.
     """
@@ -218,24 +221,23 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> T
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
 
-    model, data = initialize_world_and_robot()
+    model, data, to_track = initialize_world_and_robot()
 
     # Initialise history tracking
-    tracker = Tracker()
+    history = []
 
     # Import Controller class
     from ariel.simulation.controllers.controller import Controller
 
     # Define controller callback
     def nn_controller_callback(m, d):
-        outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu)
+        outputs = numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu, history)
         return outputs
 
     # Instantiate Controller
     ctrl = Controller(
         controller_callback_function=nn_controller_callback,
         tracker=None,
-        alpha=CONFIG["OUTPUT_DELTA"],
     )
 
     mujoco.set_mjcb_control(lambda m, d: ctrl.set_control(m, d))
@@ -274,7 +276,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> T
 
     mujoco.set_mjcb_control(None)
 
-    return tracker
+    return history
 
 def calc_origin_distance(history: list) -> float:
     """
@@ -524,9 +526,8 @@ def calc_median_segment_distance(history: list) -> float:
     median_segment_fit = np.median(projected_segment_fits) if projected_segment_fits else 0.0
     return median_segment_fit
 
-def fitness(tracker: Tracker) -> float:
+def fitness(history: list) -> float:
 
-    history = tracker.history
 
     segment_count = len(history) // CONFIG['SEGMENT_LENGTH']
     origin_distance = calc_origin_distance(history)
@@ -630,12 +631,12 @@ def evaluate_ind(ind: Individual) -> float:
     if runs > 1:
         fits = []
         for _ in range(runs):
-            tracker = run_bot_session(weights, method="headless")
-            fits.append(fitness(tracker))
+            history = run_bot_session(weights, method="headless")
+            fits.append(fitness(history))
         fit = float(np.mean(fits))
     else:
-        tracker = run_bot_session(weights, method="headless")
-        fit = fitness(tracker)
+        history = run_bot_session(weights, method="headless")
+        fit = fitness(history)
     return fit
 
 def evaluate_pop(pop: Population, pool=None) -> Population:
@@ -662,12 +663,12 @@ def evaluate_individual_isolated(genotype_list: list) -> float:
         if runs > 1:
             fits = []
             for _ in range(runs):
-                tracker = run_bot_session(weights, method="headless")
-                fits.append(fitness(tracker))
+                history = run_bot_session(weights, method="headless")
+                fits.append(fitness(history))
             fit = float(np.mean(fits))
         else:
-            tracker = run_bot_session(weights, method="headless")
-            fit = fitness(tracker)
+            history = run_bot_session(weights, method="headless")
+            fit = fitness(history)
         return fit
     except Exception as e:
         console.log(f"Evaluation failed for individual: {e}")
@@ -952,7 +953,7 @@ def evolve_using_ariel_ec(
         set_gecko_body(gecko_body)
     pool = pool if pool is not None else get_pool()
     console.rule("[green]Starting Evolutionary Run")
-    model, data = initialize_world_and_robot()
+    model, data, to_track = initialize_world_and_robot()
     input_size = model.nq
     output_size = model.nu
     hidden_size = CONFIG["HIDDEN_SIZE"]
@@ -1026,21 +1027,21 @@ def evolve_using_ariel_ec(
                 best_individual: Individual = ea.get_solution('best', only_alive=False)
                 best_weights = np.array(best_individual.genotype, dtype=np.float32)
                 if CONFIG["RECORD_BATCH"] or interactive_mode:
-                    best_tracker = run_bot_session(best_weights, method="headless")
+                    best_history = run_bot_session(best_weights, method="headless")
                 if CONFIG["RECORD_BATCH"]:
                     console.log(f"Recording best individual of generation {gen} with fitness {best_individual.fitness:.5f}")
                     run_bot_session(best_weights, method="record", options={"filename": "auto_recording", "mode": CONFIG["FITNESS_MODE"], "fitness": best_individual.fitness})
                     save_genotype(best_weights, best_individual.fitness)
-                    show_qpos_history(best_tracker.history, save=True)
+                    show_qpos_history(best_history, save=True)
                 if interactive_mode:
                     progress.stop()
                     console.rule(f"Generation {gen} - Best Fitness: {best_individual.fitness:.5f}")
                     console.log("Running best individual in viewer...")
                     console.log(f"Current runtime: {(time.time() - evolution_start_time)/60:.2f} minutes")
-                    show_qpos_history(best_tracker.history)
-                    console.log(f"total distance walked: {calc_origin_distance(best_tracker.history):.2f}")
-                    console.log(f"total forward distance: {calc_forward_distance(best_tracker.history):.2f}")
-                    console.log(f"total lateral distance: {calc_lateral_distance(best_tracker.history):.2f}")
+                    show_qpos_history(best_history)
+                    console.log(f"total distance walked: {calc_origin_distance(best_history):.2f}")
+                    console.log(f"total forward distance: {calc_forward_distance(best_history):.2f}")
+                    console.log(f"total lateral distance: {calc_lateral_distance(best_history):.2f}")
                     console.log(f"Make sure to close the viewer window to continue evolution.")
                     run_bot_session(best_weights, method="viewer")
                     user_input = Prompt.ask("Continue evolution? (y)es, (n)o, (s)kip interactive", choices=["y", "n", "s"], default="y")
@@ -1071,13 +1072,13 @@ def evolve_using_ariel_ec(
     best_weights = np.array(best.genotype, dtype=np.float32)
     if CONFIG["RECORD_LAST"]:
         run_bot_session(best_weights, method="record", options={"filename": "final_recording", "mode": CONFIG["FITNESS_MODE"], "fitness": best.fitness})
-    tracker = run_bot_session(best_weights, method="headless")
-    median_tracker = run_bot_session(np.array(median.genotype, dtype=np.float32), method="headless")
-    worst_tracker = run_bot_session(np.array(worst.genotype, dtype=np.float32), method="headless")
-    show_qpos_history(worst_tracker.history, save=True)
-    show_qpos_history(median_tracker.history, save=True)
+    history = run_bot_session(best_weights, method="headless")
+    median_history = run_bot_session(np.array(median.genotype, dtype=np.float32), method="headless")
+    worst_history = run_bot_session(np.array(worst.genotype, dtype=np.float32), method="headless")
+    show_qpos_history(worst_history, save=True)
+    show_qpos_history(median_history, save=True)
     save_genotype(best_weights, best.fitness)
-    show_qpos_history(tracker.history, save=True)
+    show_qpos_history(history, save=True)
     console.rule(f"Evolution complete in {(time.time() - evolution_start_time)/60:.2f} minutes.   Best fitness: {best.fitness:.5f}")
     console.log(f"Best fitness: {best.fitness:.5f}")
     console.log(f"Median fitness: {median.fitness:.5f}")
@@ -1123,12 +1124,12 @@ def test_loaded_genotype(file_path: str) -> None:
     Loads a genotype from file, evaluates its fitness, and runs it in viewer mode.
     """
     weights = load_genotype(file_path)
-    tracker = run_bot_session(weights, method="headless")
-    fit = fitness(tracker)
+    history = run_bot_session(weights, method="headless")
+    fit = fitness(history)
     console.log(f"Tested loaded genotype fitness: {fit:.5f}")
     if CONFIG["INTERACTIVE_MODE"]:
         run_bot_session(weights, method="viewer")
-        show_qpos_history(tracker.history)
+        show_qpos_history(history)
 
 def main():
     evolve_using_ariel_ec()
