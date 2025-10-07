@@ -207,8 +207,9 @@ def initialize_world_and_robot():
     world.spawn(gecko_core.spec, spawn_position=spawn_pos, spawn_orientation=[90, 0, 0])
     model = world.spec.compile()
     data = mujoco.MjData(model)
-    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    return model, data
+    # geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
+    mj.mj_resetData(model, data)
+    return model, data, world
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> Tracker:
     """
@@ -218,10 +219,17 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> T
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
 
-    model, data = initialize_world_and_robot()
+    model, data, world = initialize_world_and_robot()
 
     # Initialise history tracking
-    tracker = Tracker()
+    mujoco_type_to_find = mujoco.mjtObj.mjOBJ_GEOM
+    name_to_bind = "core"
+    tracker = Tracker(
+        mujoco_obj_to_find=mujoco_type_to_find,
+        name_to_bind=name_to_bind,
+    )
+
+    tracker.setup(world.spec, data)
 
     # Import Controller class
     from ariel.simulation.controllers.controller import Controller
@@ -234,7 +242,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> T
     # Instantiate Controller
     ctrl = Controller(
         controller_callback_function=nn_controller_callback,
-        tracker=None,
+        tracker=tracker,
         alpha=CONFIG["OUTPUT_DELTA"],
     )
 
@@ -952,7 +960,7 @@ def evolve_using_ariel_ec(
         set_gecko_body(gecko_body)
     pool = pool if pool is not None else get_pool()
     console.rule("[green]Starting Evolutionary Run")
-    model, data = initialize_world_and_robot()
+    model, _, _ = initialize_world_and_robot()
     input_size = model.nq
     output_size = model.nu
     hidden_size = CONFIG["HIDDEN_SIZE"]
