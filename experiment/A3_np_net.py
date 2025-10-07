@@ -41,6 +41,7 @@ from ariel.utils.video_recorder import VideoRecorder
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.simulation.environments.olympic_arena import OlympicArena
 from ariel.utils.runners import simple_runner
+from ariel.utils.tracker import Tracker
 from ariel.ec.a001 import Individual, JSONIterable
 from ariel.ec.a004 import EAStep, EA, Population
 # import prebuilt robot phenotypes
@@ -172,7 +173,26 @@ def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
     return math.atan2(R[1, 0], R[0, 0])  # Z-up convention
 
 
-def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, weights: np.ndarray, input_size, hidden_size, output_size, history: list) -> None:
+def convert_tracker_to_history(tracker: Tracker) -> list:
+    """
+    Convert tracker history to the format expected by fitness functions.
+    Returns a list of [x, y, z, yaw] arrays.
+    """
+    if not tracker.history or "xpos" not in tracker.history or "xmat" not in tracker.history:
+        return []
+    
+    xpos_history = tracker.history["xpos"][0]  # First tracked object
+    xmat_history = tracker.history["xmat"][0]  # First tracked object
+    
+    history = []
+    for pos, xmat in zip(xpos_history, xmat_history):
+        yaw = yaw_from_xmat(xmat)
+        history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))
+    
+    return history
+
+
+def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: np.ndarray, input_size, hidden_size, output_size) -> np.ndarray:
     # `weights` is expected to be a flat numpy array of parameters (float)
 
     # Dynamically unpack weights for multiple hidden layers
@@ -189,10 +209,7 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, to_track, 
         x = np.tanh(np.dot(x, ws[i]))
     outputs = np.tanh(np.dot(x, ws[-1]))
     outputs = outputs * (np.pi / 2)  # Scale to [-pi/2, pi/2]
-    # Return outputs for Controller class
-    pos = to_track[0].xpos.copy()
-    yaw = yaw_from_xmat(to_track[0].xmat.copy())
-    history.append(np.array([pos[0], pos[1], pos[2], yaw], dtype=np.float32))
+    
     return outputs
 
 
@@ -209,9 +226,15 @@ def initialize_world_and_robot():
     world.spawn(gecko_core.spec, spawn_position=spawn_pos, spawn_orientation=[90, 0, 0])
     model = world.spec.compile()
     data = mujoco.MjData(model)
-    geoms = world.spec.worldbody.find_all(mujoco.mjtObj.mjOBJ_GEOM)
-    to_track = [data.bind(geom) for geom in geoms if "core" in geom.name]
-    return model, data, to_track
+    
+    # Create tracker for position and orientation data
+    tracker = Tracker(
+        mujoco_obj_to_find=mujoco.mjtObj.mjOBJ_GEOM,
+        name_to_bind="core",
+        observable_attributes=["xpos", "xmat"],
+    )
+    
+    return model, data, world, tracker
 
 def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
     """
@@ -221,24 +244,24 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
 
-    model, data, to_track = initialize_world_and_robot()
-
-    # Initialise history tracking
-    history = []
+    model, data, world, tracker = initialize_world_and_robot()
 
     # Import Controller class
     from ariel.simulation.controllers.controller import Controller
 
     # Define controller callback
     def nn_controller_callback(m, d):
-        outputs = numpy_nn_controller_move_with_weights(m, d, to_track, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu, history)
+        outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu)
         return outputs
 
-    # Instantiate Controller
+    # Instantiate Controller with tracker
     ctrl = Controller(
         controller_callback_function=nn_controller_callback,
-        tracker=None,
+        tracker=tracker,
     )
+
+    # Setup tracker before simulation
+    tracker.setup(world.spec, data)
 
     mujoco.set_mjcb_control(lambda m, d: ctrl.set_control(m, d))
 
@@ -276,7 +299,8 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
 
     mujoco.set_mjcb_control(None)
 
-    return history
+    # Convert tracker history to expected format
+    return convert_tracker_to_history(tracker)
 
 def calc_origin_distance(history: list) -> float:
     """
@@ -953,7 +977,7 @@ def evolve_using_ariel_ec(
         set_gecko_body(gecko_body)
     pool = pool if pool is not None else get_pool()
     console.rule("[green]Starting Evolutionary Run")
-    model, data, to_track = initialize_world_and_robot()
+    model, data, world, tracker = initialize_world_and_robot()
     input_size = model.nq
     output_size = model.nu
     hidden_size = CONFIG["HIDDEN_SIZE"]
@@ -966,10 +990,9 @@ def evolve_using_ariel_ec(
             super().__init__(name, operation)
             self.pool = pool
         def __call__(self, *args, **kwargs):
-            if self.pool is not None and 'pool' not in kwargs:
-                return self.operation(*args, pool=self.pool, **kwargs)
-            else:
-                return self.operation(*args, **kwargs)
+            # Always pass the pool parameter to functions that expect it
+            kwargs['pool'] = self.pool
+            return self.operation(*args, **kwargs)
     evolution_start_time = time.time()
     try:
         pop: Population = create_population(total_params=total_params, pop_size=CONFIG["POP_SIZE"], pool=pool)
