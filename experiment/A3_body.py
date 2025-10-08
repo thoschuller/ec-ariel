@@ -52,27 +52,14 @@ NUM_OF_MODULES = 30
 # TARGET_POSITION = [5, 0, 0.5]
 NDE = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
 HPD = HighProbabilityDecoder(NUM_OF_MODULES)
-POP_SIZE = 20
+POP_SIZE = 1
 TIME_LIMIT = 60*60*3.5 # in seconds
 MAX_GENERATIONS = None
 
 
-# --- Pool management --- #
-GlobalPool = None
-def get_pool():
-    global GlobalPool
-    if GlobalPool is None:
-        GlobalPool = multiprocessing.Pool(processes=multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1)
-    return GlobalPool
-def close_pool():
-    global GlobalPool
-    if GlobalPool is not None:
-        GlobalPool.close()
-        GlobalPool.join()
-        GlobalPool = None
-
 # Fancy console messages and progress bars
 install()
+(CWD / "output" / "logs").mkdir(parents=True, exist_ok=True)
 # console = Console(file=dual_writer, emoji=False, markup=False)
 console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.log"), "a"), emoji=False, markup=False)
 # console = Console()
@@ -157,32 +144,32 @@ def show_xpos_history(history: list[list[float]]) -> None:
     plt.show()
 
 
-def nn_controller(
-    model: mj.MjModel,
-    data: mj.MjData,
-) -> npt.NDArray[np.float64]:
-    # Simple 3-layer neural network
-    input_size = len(data.qpos)
-    hidden_size = 8
-    output_size = model.nu
+# def nn_controller(
+#     model: mj.MjModel,
+#     data: mj.MjData,
+# ) -> npt.NDArray[np.float64]:
+#     # Simple 3-layer neural network
+#     input_size = len(data.qpos)
+#     hidden_size = 8
+#     output_size = model.nu
 
-    # Initialize the networks weights randomly
-    # Normally, you would use the genes of an individual as the weights,
-    # Here we set them randomly for simplicity.
-    w1 = RNG.normal(loc=0.0138, scale=0.5, size=(input_size, hidden_size))
-    w2 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, hidden_size))
-    w3 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, output_size))
+#     # Initialize the networks weights randomly
+#     # Normally, you would use the genes of an individual as the weights,
+#     # Here we set them randomly for simplicity.
+#     w1 = RNG.normal(loc=0.0138, scale=0.5, size=(input_size, hidden_size))
+#     w2 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, hidden_size))
+#     w3 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, output_size))
 
-    # Get inputs, in this case the positions of the actuator motors (hinges)
-    inputs = data.qpos
+#     # Get inputs, in this case the positions of the actuator motors (hinges)
+#     inputs = data.qpos
 
-    # Run the inputs through the lays of the network.
-    layer1 = np.tanh(np.dot(inputs, w1))
-    layer2 = np.tanh(np.dot(layer1, w2))
-    outputs = np.tanh(np.dot(layer2, w3))
+#     # Run the inputs through the lays of the network.
+#     layer1 = np.tanh(np.dot(inputs, w1))
+#     layer2 = np.tanh(np.dot(layer1, w2))
+#     outputs = np.tanh(np.dot(layer2, w3))
 
-    # Scale the outputs
-    return outputs * np.pi
+#     # Scale the outputs
+#     return outputs * np.pi
 
 
 # def experiment(
@@ -266,10 +253,10 @@ def nn_controller(
 #     # ==================================================================== #
 
 # class robot to hold its genotype and phenotype
-class RobotGenotype: 
-    def __init__(self, body_genotype: list[list[float]] = [], brain_genotype: np.ndarray = None) -> None:
-        self.body_genotype = body_genotype
-        self.brain_genotype = brain_genotype
+# class RobotGenotype(): 
+#     def __init__(self, body_genotype: list[list[float]] = [], brain_genotype: np.ndarray = None) -> None:
+#         self.body_genotype = body_genotype
+#         self.brain_genotype = brain_genotype
 
 # class RobotPhenotype:
 #     def __init__(self, body_phenotype: DiGraph[Any] = DiGraph(), brain_phenotype: Any = None) -> None:
@@ -281,8 +268,8 @@ class RobotGenotype:
 #         self.genotype = genotype
 #         self.phenotype = phenotype
 
-#         if self.phenotype.body_phenotype == DiGraph() and len(self.genotype.body_genotype) > 0:
-#             p_matrices = NDE.forward(self.genotype.body_genotype)
+#         if self.phenotype.body_phenotype == DiGraph() and len(self.genotype["body_genotype"]) > 0:
+#             p_matrices = NDE.forward(self.genotype["body_genotype"])
 
 #             # Decode the high-probability graph
 #             hpd = HighProbabilityDecoder(NUM_OF_MODULES)
@@ -292,8 +279,21 @@ class RobotGenotype:
 #                 p_matrices[2],
 #             )
 
-#         if self.phenotype.brain_phenotype is None and self.genotype.brain_genotype != np.ndarray(None):
-#             self.phenotype.brain_phenotype = a3cma.get_controller_from_weights(self.genotype.brain_genotype)
+#         if self.phenotype.brain_phenotype is None and self.genotype["brain_genotype"] != np.ndarray(None):
+#             self.phenotype.brain_phenotype = a3cma.get_controller_from_weights(self.genotype["brain_genotype"])
+
+def tolist_recursive(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] | Any:
+    """Recursively convert numpy arrays in a structure to lists."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, list):
+        return [tolist_recursive(x) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(tolist_recursive(x) for x in obj)
+    elif isinstance(obj, dict):
+        return {k: tolist_recursive(v) for k, v in obj.items()}
+    else:
+        return obj
 
 config_overrides = {
     "MAX_GENERATIONS": 125,
@@ -306,7 +306,6 @@ config_overrides = {
 def create_individual() -> Individual:
     """Create a new individual with Glorot initialization."""
     individual = Individual()
-    individual.genotype = RobotGenotype()
     individual.requires_init = True
     individual.requires_eval = True
     return individual
@@ -317,33 +316,31 @@ def create_population(size: int) -> Population:
 
 def initialize_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
-    max_attempts = 10  # Limit attempts to avoid infinite loop
-    attempt = 0
-    while attempt < max_attempts:
-        try:
-            individual.genotype.body_genotype = [
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
-            ]
-            training_result = a3cma.evolve_using_cma_es(
-                gecko_body=HPD.probability_matrices_to_graph(
-                    *NDE.forward(individual.genotype.body_genotype)
-                ),
-                config_overrides=config_overrides,
-            )
-            individual.genotype.brain_genotype = training_result["genotype"]
-            individual.fitness = training_result["fitness"]
-            individual.requires_init = False
-            individual.requires_eval = False
-            return individual
-        except AttributeError as e:
-            if "'NoneType' object has no attribute 'sites'" in str(e):
-                console.log(f"Invalid body genotype generated, retrying... (attempt {attempt + 1})")
-                attempt += 1
-            else:
-                raise  # Re-raise if it's a different AttributeError
-    raise RuntimeError(f"Failed to initialize individual after {max_attempts} attempts due to invalid body genotypes.")
+    individual.genotype = ( tolist_recursive([
+        RNG.random(64).astype(np.float32),
+        RNG.random(64).astype(np.float32),
+        RNG.random(64).astype(np.float32),
+    ]),
+    [] # brain genotype will be set after training
+    )
+
+    p_matrices = NDE.forward(np.array(individual.genotype[0]))
+
+    import copy
+    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    training_result = a3cma.evolve_using_cma_es(
+        gecko_body=copy.deepcopy(hpd.probability_matrices_to_graph(
+            p_matrices[0],
+            p_matrices[1],
+            p_matrices[2],
+        )),
+        config_overrides=config_overrides,
+    )
+    individual.genotype = (individual.genotype[0], training_result["genotype"])
+    individual.fitness = training_result["fitness"]
+    individual.requires_init = False
+    individual.requires_eval = False
+    return individual
 
 def initialize_population(population: Population, config_overrides: dict[str, Any] = config_overrides) -> Population:
     """initialize a population of individuals"""
@@ -358,13 +355,18 @@ def train_and_evaluate_individual(individual: Individual, config_overrides: dict
     if individual.requires_init:
         individual = initialize_individual(individual)
     else:
+        import copy
+        hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+        p_matrices = NDE.forward(np.array(individual.genotype[0]))
         training_result = a3cma.evolve_using_cma_es(
-            gecko_body=HPD.probability_matrices_to_graph(
-                *NDE.forward(individual.genotype.body_genotype)
-            ),
+            gecko_body=copy.deepcopy(hpd.probability_matrices_to_graph(
+                p_matrices[0],
+                p_matrices[1],
+                p_matrices[2],
+            )),
             config_overrides=config_overrides
         )
-        individual.genotype.brain_genotype = training_result["genotype"]
+        individual.genotype = (individual.genotype[0], training_result["genotype"])
         individual.fitness = training_result["fitness"]
         individual.requires_eval = False
     return individual
@@ -403,7 +405,8 @@ def survivor_selection(population: Population) -> Population:
     np.random.shuffle(population)
     current_pop_size = len(population)
 
-    for idx in range(len(population)):
+    # Iterate in pairs, never go out of bounds
+    for idx in range(0, len(population) - 1, 2):
         ind_i = population[idx]
         ind_j = population[idx + 1]
 
@@ -417,7 +420,13 @@ def survivor_selection(population: Population) -> Population:
         current_pop_size -= 1
         if current_pop_size <= POP_SIZE:
             break
-    return population
+
+    # Remove dead individuals to maintain population size
+    survivors = [ind for ind in population if getattr(ind, 'alive', True)]
+    # If too many, trim to POP_SIZE
+    if len(survivors) > POP_SIZE:
+        survivors = survivors[:POP_SIZE]
+    return survivors
 
 class Crossover:    
     @staticmethod
@@ -448,12 +457,12 @@ def crossover_individuals(ind1 : Individual, ind2: Individual) -> tuple[Individu
         child_i = Individual()
         child_j = Individual()
         body_genotype_i, body_genotype_j = Crossover.uniform(
-            cast("list[list[float]]", parent_i.genotype.body_genotype),
-            cast("list[list[float]]", parent_j.genotype.body_genotype),
+            cast("list[list[float]]", parent_i.genotype[0]),
+            cast("list[list[float]]", parent_j.genotype[0]),
         )
-        child_i.genotype.body_genotype = body_genotype_i
+        child_i.genotype = (body_genotype_i, None)
         child_i.requires_eval = True
-        child_j.genotype.body_genotype = body_genotype_j
+        child_j.genotype = (body_genotype_j, None)
         child_j.requires_eval = True
 
 
@@ -480,14 +489,15 @@ def crossover(population: Population) -> Population:
 
 def mutate_individual(individual: Individual, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Individual:
     """Mutate an individual's body genotype with given probability and stddev"""
-    body_genotype = individual.genotype.body_genotype
+    body_genotype = cast("list[list[float]]", individual.genotype[0])
     mutated_body_genotype = []
     for gene_array in body_genotype:
-        mutation_mask = RNG.random(gene_array.shape) > mutation_probability
-        mutations = RNG.normal(0, mutation_stddev, gene_array.shape)
-        new_gene_array = gene_array + mutation_mask * mutations
-        mutated_body_genotype.append(new_gene_array.astype(np.float32))
-    individual.genotype.body_genotype = mutated_body_genotype
+        gene_array_np = np.array(gene_array, dtype=np.float32)  # Ensure numpy array
+        mutation_mask = RNG.random(gene_array_np.shape) > mutation_probability
+        mutations = RNG.normal(0, mutation_stddev, gene_array_np.shape)
+        new_gene_array = gene_array_np + mutation_mask * mutations
+        mutated_body_genotype.append(new_gene_array.astype(np.float32).tolist())  # Convert back to list
+    individual.genotype = (mutated_body_genotype, None)
     individual.requires_eval = True
     individual.tags['mut'] = False
     return individual
@@ -499,7 +509,7 @@ def mutate(population: Population, mutation_probability: float = 0.5, mutation_s
             individual = mutate_individual(individual, mutation_probability, mutation_stddev)
     return population
 
-def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type: ignore
+def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #type: ignore
     """full evolution of body and brain genotypes
     returns fitness, body_genotype, brain_genotype, body_phenotype"""
 
@@ -547,7 +557,9 @@ def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type:
             runtime = time.time() - start_time
             PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
             console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
-            a3cma.run_weights_only(method="record", weights=ea.get_solution('best', only_alive=False).genotype.brain_genotype, gecko_body=HPD.probability_matrices_to_graph(*NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)))
+            p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
+            hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+            a3cma.run_weights_only(method="record", weights=np.array(ea.get_solution('best', only_alive=False).genotype[1]), gecko_body=hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2]))
             if(best_fitness >= 60 and config_overrides["DURATION"] is not None and config_overrides["DURATION"] < 100): # type: ignore
                 console.rule(f"Reached fitness threshold 2 with fitness {best_fitness:.4f}. Starting next stage.")
                 config_overrides["MULTI_EVAL_RUNS"] = 3
@@ -556,10 +568,14 @@ def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type:
                 console.rule(f"Reached fitness threshold 1 with fitness {best_fitness:.4f}. Starting next stage.")
                 config_overrides["MULTI_EVAL_RUNS"] = 3
                 config_overrides["DURATION"] = 60
+
+            p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
+            hpd = HighProbabilityDecoder(NUM_OF_MODULES)
             save_graph_as_json(
-                
-                HPD.probability_matrices_to_graph(
-                    *NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)
+                hpd.probability_matrices_to_graph(
+                    p_matrices[0],
+                    p_matrices[1],
+                    p_matrices[2],
                 ),
                 CWD / "output" / "genotypes" / f"best_body_genotype_gen{ea.current_generation}_fit{best_fitness:.4f}.json",
             )
@@ -570,9 +586,13 @@ def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type:
         console.rule("Evolution process finished.")
         console.log("Best Fitness:", ea.get_solution('best', only_alive=False).fitness)
         console.log("Saving best individual...")
+        p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
+        hpd = HighProbabilityDecoder(NUM_OF_MODULES)
         save_graph_as_json(
-            HPD.probability_matrices_to_graph(
-                *NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)
+            hpd.probability_matrices_to_graph(
+                p_matrices[0],
+                p_matrices[1],
+                p_matrices[2],
             ),
             CWD / "output" / "genotypes" / f"best_body_genotype_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.json",
         )
@@ -586,8 +606,14 @@ def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type:
         console.log("Evolution process completed.")
 
 
-
-    return ea.get_solution('best', only_alive=False).fitness, ea.get_solution('best', only_alive=False).genotype.body_genotype, ea.get_solution('best', only_alive=False).genotype.brain_genotype, HPD.probability_matrices_to_graph(*NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype))
+    final_ind = ea.get_solution('best', only_alive=False)
+    final_fit: float = final_ind.fitness
+    final_body_genotype: list[list[float]] = cast("list[list[float]]", final_ind.genotype[0])
+    final_brain_genotype: np.ndarray = np.array(final_ind.genotype[1])
+    p_matrices = NDE.forward(np.array(final_body_genotype))
+    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    final_graph = hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2])
+    return final_fit, final_body_genotype, final_brain_genotype, final_graph
 
 
 # def main() -> None:

@@ -58,7 +58,6 @@ from networkx import DiGraph  # Add this import
 import random
 
 # --- Configurable global settings --- #
-global NEURALNET_EVO_CONFIG
 NEURALNET_EVO_CONFIG = {
     "SIM_WORLD": OlympicArena,
     "SEED": 42,
@@ -91,20 +90,6 @@ NEURALNET_EVO_CONFIG = {
     "MUTATION_STDDEV": 0.1,
     "SAVE_PLOTS": False
 }
-
-# --- Pool management --- #
-GlobalPool = None
-def get_pool():
-    global GlobalPool
-    if GlobalPool is None and NEURALNET_EVO_CONFIG["PARALLEL"] and NEURALNET_EVO_CONFIG["PARALLEL_CORES"] > 1:
-        GlobalPool = multiprocessing.Pool(processes=NEURALNET_EVO_CONFIG["PARALLEL_CORES"])
-    return GlobalPool
-def close_pool():
-    global GlobalPool
-    if GlobalPool is not None:
-        GlobalPool.close()
-        GlobalPool.join()
-        GlobalPool = None
 
 def set_config(overrides: dict):
     if overrides:
@@ -211,7 +196,7 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     for i in range(NEURALNET_EVO_CONFIG["NUM_HIDDEN_LAYERS"]):
         x = np.tanh(np.dot(x, ws[i]))
     outputs = np.tanh(np.dot(x, ws[-1]))
-    outputs = outputs * np.pi * 0.5  # Scale to [-0.5 * pi, 0.5 * pi]
+    outputs = outputs * np.pi
     
     return outputs
 
@@ -223,7 +208,8 @@ def initialize_world_and_robot(gecko_body=None):
     
     # If gecko_core is a DiGraph (robot_graph), reconstruct the spec from it
     if isinstance(gecko_core, DiGraph):
-        gecko_core = construct_mjspec_from_graph(gecko_core)
+        import copy
+        gecko_core = construct_mjspec_from_graph(copy.deepcopy(gecko_core))
     
     if NEURALNET_EVO_CONFIG["SIM_WORLD"] == SimpleFlatWorld:
         spawn_pos = [0, 0, 0]
@@ -274,7 +260,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None, geck
 
     # Define controller callback
     def nn_controller_callback(m, d):
-        outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, NEURALNET_EVO_CONFIG["HIDDEN_SIZE"], model.nu)
+        outputs = numpy_nn_controller_move_with_weights(m, d, weights, len(d.qpos), NEURALNET_EVO_CONFIG["HIDDEN_SIZE"], model.nu)
         return outputs
 
     # Instantiate Controller with tracker
@@ -828,7 +814,7 @@ def get_controller_from_weights(weights: np.ndarray) -> Controller:
     Return a controller that uses the given weights.
     """
     def nn_controller_callback(m, d):
-        outputs = numpy_nn_controller_move_with_weights(m, d, weights, m.nq, CONFIG["HIDDEN_SIZE"], m.nu)
+        outputs = numpy_nn_controller_move_with_weights(m, d, weights, len(d.qpos), CONFIG["HIDDEN_SIZE"], m.nu)
         return outputs
 
     ctrl = Controller(
@@ -899,7 +885,13 @@ def evolve_using_cma_es(
         set_fitness_function(fitness_function)
     if gecko_body:
         set_gecko_body(gecko_body)
-    pool = pool if pool is not None else get_pool()
+    if NEURALNET_EVO_CONFIG["PARALLEL"] and NEURALNET_EVO_CONFIG["PARALLEL_CORES"] > 1:
+        if pool is None:
+            pool = multiprocessing.Pool(NEURALNET_EVO_CONFIG["PARALLEL_CORES"])
+        console.log(f"Using multiprocessing pool with {NEURALNET_EVO_CONFIG['PARALLEL_CORES']} cores")
+    else:
+        pool = None
+        console.log("Running in single-threaded mode")
     console.rule("[green]Starting CMA-ES Run")
     model, data, world, tracker = initialize_world_and_robot()
     input_size = model.nq
@@ -1013,7 +1005,9 @@ def evolve_using_cma_es(
             else:
                 progress.stop()
     finally:
-        pass  # Pool is managed externally
+        if pool:
+            pool.close()
+            pool.join()
     
     best_weights = np.array(best_solution, dtype=np.float32)
     if NEURALNET_EVO_CONFIG["RECORD_LAST"]:
@@ -1084,7 +1078,8 @@ def run_weights_only(weights: np.ndarray, method: str = "viewer", options: dict 
     """
     Runs a provided set of weights in the specified method (viewer, headless, record).
     """
-    history = run_bot_session(weights, method=method, options=options, gecko_override=gecko_body)
+    tracker = run_bot_session(weights, method=method, options=options, gecko_body=gecko_body)
+    history = convert_tracker_to_history(tracker)
     fit = fitness(history)
     console.log(f"Ran provided weights with fitness: {fit:.5f}")
     if method == "headless" and NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]:
