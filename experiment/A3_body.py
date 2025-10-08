@@ -443,12 +443,12 @@ class Crossover:
         child1, child2 = [], []
         for i in range(len(parent_i)):
             mask = np.random.randint(0, 2, size=len(parent_i[i])).astype(bool)
-            c1 = parent_i[i].copy()
-            c2 = parent_j[i].copy()
-            c1[mask] = parent_j[i][mask]
-            c2[mask] = parent_i[i][mask]
-            child1.append(c1)
-            child2.append(c2)
+            c1 = np.array(parent_i[i], dtype=np.float32)
+            c2 = np.array(parent_j[i], dtype=np.float32)
+            c1[mask] = np.array(parent_j[i], dtype=np.float32)[mask]
+            c2[mask] = np.array(parent_i[i], dtype=np.float32)[mask]
+            child1.append(c1.tolist())
+            child2.append(c2.tolist())
         return child1, child2
 
 def crossover_individuals(ind1 : Individual, ind2: Individual) -> tuple[Individual, Individual]:
