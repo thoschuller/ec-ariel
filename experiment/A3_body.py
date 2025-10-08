@@ -1,0 +1,673 @@
+"""Assignment 3 template code."""
+
+# Standard library
+import multiprocessing
+from pathlib import Path
+import time
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+import matplotlib.pyplot as plt
+import mujoco as mj
+import numpy as np
+import numpy.typing as npt
+from mujoco import viewer
+
+# Local libraries
+from ariel import console
+from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
+    HighProbabilityDecoder,
+    save_graph_as_json,
+)
+from ariel.ec.a001 import Individual
+from ariel.ec.a003 import Population
+from ariel.ec.a004 import EAStep, EA
+from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
+from ariel.simulation.environments import OlympicArena
+from ariel.utils.renderers import single_frame_renderer
+from ariel.utils.tracker import Tracker
+from ariel.simulation.controllers.controller import Controller
+import A3_net_cma as a3cma
+
+from rich.console import Console
+from rich.traceback import install
+from rich.progress import Progress
+from networkx import DiGraph
+
+# Type Aliases
+type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
+
+# --- RANDOM GENERATOR SETUP --- #
+SEED = 42
+RNG = np.random.default_rng(SEED)
+
+# --- DATA SETUP ---
+SCRIPT_NAME = __file__.split("/")[-1][:-3]
+CWD = Path.cwd()
+DATA = CWD / "__data__" / SCRIPT_NAME
+DATA.mkdir(exist_ok=True)
+
+# Global variables
+SPAWN_POS = [-0.8, 0, 0.1]
+NUM_OF_MODULES = 30
+# TARGET_POSITION = [5, 0, 0.5]
+NDE = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
+HPD = HighProbabilityDecoder(NUM_OF_MODULES)
+POP_SIZE = 20
+TIME_LIMIT = 60*60*3.5 # in seconds
+MAX_GENERATIONS = None
+
+
+# --- Pool management --- #
+GlobalPool = None
+def get_pool():
+    global GlobalPool
+    if GlobalPool is None:
+        GlobalPool = multiprocessing.Pool(processes=multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1)
+    return GlobalPool
+def close_pool():
+    global GlobalPool
+    if GlobalPool is not None:
+        GlobalPool.close()
+        GlobalPool.join()
+        GlobalPool = None
+
+# Fancy console messages and progress bars
+install()
+# console = Console(file=dual_writer, emoji=False, markup=False)
+console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.log"), "a"), emoji=False, markup=False)
+# console = Console()
+console.rule(f"Body evolution started.")
+PROGRESS = Progress(console=console)
+
+
+# def fitness_function(history: list[list[float]]) -> float:
+#     xt, yt, zt = TARGET_POSITION
+#     xc, yc, zc = history[-1]
+
+#     # Minimize the distance --> maximize the negative distance
+#     cartesian_distance = np.sqrt(
+#         (xt - xc) ** 2 + (yt - yc) ** 2 + (zt - zc) ** 2,
+#     )
+#     return -cartesian_distance
+
+
+def show_xpos_history(history: list[list[float]]) -> None:
+    # Create a tracking camera
+    camera = mj.MjvCamera()
+    camera.type = mj.mjtCamera.mjCAMERA_FREE
+    camera.lookat = [2.5, 0, 0]
+    camera.distance = 10
+    camera.azimuth = 0
+    camera.elevation = -90
+
+    # Initialize world to get the background
+    mj.set_mjcb_control(None)
+    world = OlympicArena()
+    model = world.spec.compile()
+    data = mj.MjData(model)
+    save_path = str(DATA / "background.png")
+    single_frame_renderer(
+        model,
+        data,
+        camera=camera,
+        save_path=save_path,
+        save=True,
+    )
+
+    # Setup background image
+    img = plt.imread(save_path)
+    _, ax = plt.subplots()
+    ax.imshow(img)
+    w, h, _ = img.shape
+
+    # Convert list of [x,y,z] positions to numpy array
+    pos_data = np.array(history)
+
+    # Calculate initial position
+    x0, y0 = int(h * 0.483), int(w * 0.815)
+    xc, yc = int(h * 0.483), int(w * 0.9205)
+    ym0, ymc = 0, SPAWN_POS[0]
+
+    # Convert position data to pixel coordinates
+    pixel_to_dist = -((ymc - ym0) / (yc - y0))
+    pos_data_pixel = [[xc, yc]]
+    for i in range(len(pos_data) - 1):
+        xi, yi, _ = pos_data[i]
+        xj, yj, _ = pos_data[i + 1]
+        xd, yd = (xj - xi) / pixel_to_dist, (yj - yi) / pixel_to_dist
+        xn, yn = pos_data_pixel[i]
+        pos_data_pixel.append([xn + int(xd), yn + int(yd)])
+    pos_data_pixel = np.array(pos_data_pixel)
+
+    # Plot x,y trajectory
+    ax.plot(x0, y0, "kx", label="[0, 0, 0]")
+    ax.plot(xc, yc, "go", label="Start")
+    ax.plot(pos_data_pixel[:, 0], pos_data_pixel[:, 1], "b-", label="Path")
+    ax.plot(pos_data_pixel[-1, 0], pos_data_pixel[-1, 1], "ro", label="End")
+
+    # Add labels and title
+    ax.set_xlabel("X Position")
+    ax.set_ylabel("Y Position")
+    ax.legend()
+
+    # Title
+    plt.title("Robot Path in XY Plane")
+
+    # Show results
+    plt.show()
+
+
+def nn_controller(
+    model: mj.MjModel,
+    data: mj.MjData,
+) -> npt.NDArray[np.float64]:
+    # Simple 3-layer neural network
+    input_size = len(data.qpos)
+    hidden_size = 8
+    output_size = model.nu
+
+    # Initialize the networks weights randomly
+    # Normally, you would use the genes of an individual as the weights,
+    # Here we set them randomly for simplicity.
+    w1 = RNG.normal(loc=0.0138, scale=0.5, size=(input_size, hidden_size))
+    w2 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, hidden_size))
+    w3 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, output_size))
+
+    # Get inputs, in this case the positions of the actuator motors (hinges)
+    inputs = data.qpos
+
+    # Run the inputs through the lays of the network.
+    layer1 = np.tanh(np.dot(inputs, w1))
+    layer2 = np.tanh(np.dot(layer1, w2))
+    outputs = np.tanh(np.dot(layer2, w3))
+
+    # Scale the outputs
+    return outputs * np.pi
+
+
+# def experiment(
+#     robot: Any,
+#     controller: Controller,
+#     duration: int = 15,
+#     mode: ViewerTypes = "viewer",
+# ) -> None:
+#     """Run the simulation with random movements."""
+#     # ==================================================================== #
+#     # Initialise controller to controller to None, always in the beginning.
+#     mj.set_mjcb_control(None)  # DO NOT REMOVE
+
+#     # Initialise world
+#     # Import environments from ariel.simulation.environments
+#     world = OlympicArena()
+
+#     # Spawn robot in the world
+#     # Check docstring for spawn conditions
+#     world.spawn(robot.spec, spawn_position=SPAWN_POS)
+
+#     # Generate the model and data
+#     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE
+#     model = world.spec.compile()
+#     data = mj.MjData(model)
+
+#     # Reset state and time of simulation
+#     mj.mj_resetData(model, data)
+
+#     # Pass the model and data to the tracker
+#     if controller.tracker is not None:
+#         controller.tracker.setup(world.spec, data)
+
+#     # Set the control callback function
+#     # This is called every time step to get the next action.
+#     args: list[Any] = []  # IF YOU NEED MORE ARGUMENTS ADD THEM HERE!
+#     kwargs: dict[Any, Any] = {}  # IF YOU NEED MORE ARGUMENTS ADD THEM HERE!
+
+#     mj.set_mjcb_control(
+#         lambda m, d: controller.set_control(m, d, *args, **kwargs), # type: ignore
+#     )
+
+#     # ------------------------------------------------------------------ #
+#     match mode:
+#         case "simple":
+#             # This disables visualisation (fastest option)
+#             simple_runner(
+#                 model,
+#                 data,
+#                 duration=duration,
+#             )
+#         case "frame":
+#             # Render a single frame (for debugging)
+#             save_path = str(DATA / "robot.png")
+#             single_frame_renderer(model, data, save=True, save_path=save_path)
+#         case "video":
+#             # This records a video of the simulation
+#             path_to_video_folder = str(DATA / "videos")
+#             video_recorder = VideoRecorder(output_folder=path_to_video_folder)
+
+#             # Render with video recorder
+#             video_renderer(
+#                 model,
+#                 data,
+#                 duration=duration,
+#                 video_recorder=video_recorder,
+#             )
+#         case "launcher":
+#             # This opens a liver viewer of the simulation
+#             viewer.launch(
+#                 model=model,
+#                 data=data,
+#             )
+#         case "no_control":
+#             # If mj.set_mjcb_control(None), you can control the limbs manually.
+#             mj.set_mjcb_control(None)
+#             viewer.launch(
+#                 model=model,
+#                 data=data,
+#             )
+#     # ==================================================================== #
+
+# class robot to hold its genotype and phenotype
+class RobotGenotype: 
+    def __init__(self, body_genotype: list[list[float]] = [], brain_genotype: np.ndarray = None) -> None:
+        self.body_genotype = body_genotype
+        self.brain_genotype = brain_genotype
+
+# class RobotPhenotype:
+#     def __init__(self, body_phenotype: DiGraph[Any] = DiGraph(), brain_phenotype: Any = None) -> None:
+#         self.body_phenotype = body_phenotype
+#         self.brain_phenotype = brain_phenotype
+
+# class Robot:
+#     def __init__(self, genotype: RobotGenotype = RobotGenotype(), phenotype: RobotPhenotype = RobotPhenotype()) -> None:
+#         self.genotype = genotype
+#         self.phenotype = phenotype
+
+#         if self.phenotype.body_phenotype == DiGraph() and len(self.genotype.body_genotype) > 0:
+#             p_matrices = NDE.forward(self.genotype.body_genotype)
+
+#             # Decode the high-probability graph
+#             hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+#             self.phenotype.body_phenotype = hpd.probability_matrices_to_graph(
+#                 p_matrices[0],
+#                 p_matrices[1],
+#                 p_matrices[2],
+#             )
+
+#         if self.phenotype.brain_phenotype is None and self.genotype.brain_genotype != np.ndarray(None):
+#             self.phenotype.brain_phenotype = a3cma.get_controller_from_weights(self.genotype.brain_genotype)
+
+config_overrides = {
+    "MAX_GENERATIONS": 125,
+    "MULTI_EVAL_RUNS": 1,
+    "CONSOLE": console,
+    "PROGRESS": PROGRESS,
+}
+
+
+def create_individual() -> Individual:
+    """Create a new individual with Glorot initialization."""
+    individual = Individual()
+    individual.genotype = RobotGenotype()
+    individual.requires_init = True
+    individual.requires_eval = True
+    return individual
+
+def create_population(size: int) -> Population:
+    """Create a population of individuals."""
+    return [create_individual() for _ in range(size)]
+
+def initialize_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
+    """train and evaluate a single individual, set its fitness attribute"""
+    max_attempts = 10  # Limit attempts to avoid infinite loop
+    attempt = 0
+    while attempt < max_attempts:
+        try:
+            individual.genotype.body_genotype = [
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+            ]
+            training_result = a3cma.evolve_using_cma_es(
+                gecko_body=HPD.probability_matrices_to_graph(
+                    *NDE.forward(individual.genotype.body_genotype)
+                ),
+                config_overrides=config_overrides,
+            )
+            individual.genotype.brain_genotype = training_result["genotype"]
+            individual.fitness = training_result["fitness"]
+            individual.requires_init = False
+            individual.requires_eval = False
+            return individual
+        except AttributeError as e:
+            if "'NoneType' object has no attribute 'sites'" in str(e):
+                console.log(f"Invalid body genotype generated, retrying... (attempt {attempt + 1})")
+                attempt += 1
+            else:
+                raise  # Re-raise if it's a different AttributeError
+    raise RuntimeError(f"Failed to initialize individual after {max_attempts} attempts due to invalid body genotypes.")
+
+def initialize_population(population: Population, config_overrides: dict[str, Any] = config_overrides) -> Population:
+    """initialize a population of individuals"""
+    for individual in population:
+        console.log(f"Initializing individual number {population.index(individual)+1}/{len(population)}")
+        if individual.requires_init:
+            individual = initialize_individual(individual, config_overrides)
+    return population
+
+def train_and_evaluate_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
+    """train and evaluate a single individual, set its fitness attribute"""
+    if individual.requires_init:
+        individual = initialize_individual(individual)
+    else:
+        training_result = a3cma.evolve_using_cma_es(
+            gecko_body=HPD.probability_matrices_to_graph(
+                *NDE.forward(individual.genotype.body_genotype)
+            ),
+            config_overrides=config_overrides
+        )
+        individual.genotype.brain_genotype = training_result["genotype"]
+        individual.fitness = training_result["fitness"]
+        individual.requires_eval = False
+    return individual
+
+def evaluate_population(population: Population) -> Population:
+    """evaluate a population of individuals"""
+    for individual in population:
+        if individual.requires_eval:
+            individual = train_and_evaluate_individual(individual)
+    return population
+
+def parent_selection(population: Population) -> Population:
+    #TODO: implement a better selection mechanism
+    """Tournament selection"""
+
+    # Shuffle population to avoid bias
+    np.random.shuffle(population)
+
+    # Tournament selection
+    for idx in range(0, len(population) - 1, 2):
+        ind_i = population[idx]
+        ind_j = population[idx + 1]
+
+        # Compare fitness values and update tags
+        if ind_i.fitness > ind_j.fitness:
+            ind_i.tags['ps'] = True
+            ind_j.tags['ps'] = False
+        else:
+            ind_i.tags['ps'] = False
+            ind_j.tags['ps'] = True
+    return population
+
+def survivor_selection(population: Population) -> Population:
+
+    # Shuffle population to avoid bias
+    np.random.shuffle(population)
+    current_pop_size = len(population)
+
+    for idx in range(len(population)):
+        ind_i = population[idx]
+        ind_j = population[idx + 1]
+
+        # Kill worse individual
+        if ind_i.fitness > ind_j.fitness:
+            ind_j.alive = False
+        else:
+            ind_i.alive = False
+
+        # Termination condition
+        current_pop_size -= 1
+        if current_pop_size <= POP_SIZE:
+            break
+    return population
+
+class Crossover:    
+    @staticmethod
+    def uniform(
+        parent_i: list[list[float]],
+        parent_j: list[list[float]],
+    ) -> tuple[list[list[float]], list[list[float]]]:
+        child1, child2 = [], []
+        for i in range(len(parent_i)):
+            mask = np.random.integers(0, 2, size=len(parent_i[i])).astype(bool)
+            child1[i] = parent_i[i].copy()
+            child2[i] = parent_j[i].copy()
+            child1[i][mask] = parent_j[i][mask]
+            child2[i][mask] = parent_i[i][mask]
+        return child1, child2
+
+def crossover_individuals(ind1 : Individual, ind2: Individual) -> tuple[Individual, Individual]:
+    parent_i = ind1.model_copy(deep=True)
+    parent_j = ind2.model_copy(deep=True)
+
+    # Decide which to crossover and which to clone directly
+
+    if np.random.random() < 0.25:
+        child_i = parent_i
+        child_j = parent_j
+    
+    else:
+        child_i = Individual()
+        child_j = Individual()
+        body_genotype_i, body_genotype_j = Crossover.uniform(
+            cast("list[list[float]]", parent_i.genotype.body_genotype),
+            cast("list[list[float]]", parent_j.genotype.body_genotype),
+        )
+        child_i.genotype.body_genotype = body_genotype_i
+        child_i.requires_eval = True
+        child_j.genotype.body_genotype = body_genotype_j
+        child_j.requires_eval = True
+
+
+    child_i.tags['mut'] = True
+    child_j.tags['mut'] = True
+
+    ind1.tags['ps'] = False
+    ind2.tags['ps'] = False
+
+    return child_i, child_j
+
+def crossover(population: Population) -> Population:
+    """Crossover individuals tagged for parent selection"""
+    # Shuffle population to avoid bias
+    parents = [ind for ind in population if ind.tags.get('ps', False)]
+    np.random.shuffle(parents)
+    for idx in range(0, len(parents) - 1, 2):
+            parent_i = parents[idx]
+            parent_j = parents[idx+1]
+            child_i, child_j = crossover_individuals(parent_i, parent_j)
+            population.extend([child_i, child_j])
+
+    return population
+
+def mutate_individual(individual: Individual, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Individual:
+    """Mutate an individual's body genotype with given probability and stddev"""
+    body_genotype = individual.genotype.body_genotype
+    mutated_body_genotype = []
+    for gene_array in body_genotype:
+        mutation_mask = RNG.random(gene_array.shape) > mutation_probability
+        mutations = RNG.normal(0, mutation_stddev, gene_array.shape)
+        new_gene_array = gene_array + mutation_mask * mutations
+        mutated_body_genotype.append(new_gene_array.astype(np.float32))
+    individual.genotype.body_genotype = mutated_body_genotype
+    individual.requires_eval = True
+    individual.tags['mut'] = False
+    return individual
+
+def mutate(population: Population, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Population:
+    """Mutate individuals tagged for mutation"""
+    for individual in population:
+        if individual.tags.get('mut', True):
+            individual = mutate_individual(individual, mutation_probability, mutation_stddev)
+    return population
+
+def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type: ignore
+    """full evolution of body and brain genotypes
+    returns fitness, body_genotype, brain_genotype, body_phenotype"""
+
+    start_time = time.time()
+
+    try:
+
+        # get_pool()
+
+        # Create initial population
+        console.rule("Creating initial population")
+        population = evaluate_population(initialize_population(create_population(POP_SIZE)))
+        console.log(f"Initial population created with {len(population)} individuals.")
+        ops = [
+            EAStep("evalutation", evaluate_population),
+            EAStep("parent_selection", parent_selection),
+            EAStep("crossover", crossover),
+            EAStep("mutation", mutate),
+            EAStep("evalutation", evaluate_population),
+            EAStep("survivor_selection", survivor_selection),
+        ]
+        ea = EA(
+            population=population,
+            operations=ops,
+            quiet=False,
+        )
+
+        def terminate() -> bool:
+            if MAX_GENERATIONS and ea.current_generation >= MAX_GENERATIONS:
+                console.log("Reached maximum generations.")
+                return True
+            if time.time() - start_time >= TIME_LIMIT:
+                console.log("Reached time limit.")
+                return True
+            return False
+        
+        task = PROGRESS.add_task("[green]Evolving bodies...", total=MAX_GENERATIONS if MAX_GENERATIONS else TIME_LIMIT if TIME_LIMIT else None)
+        PROGRESS.start()
+
+        while not terminate():
+            console.log(f"Running evolution step for generation {ea.current_generation}...")
+            ea.step()
+            best_fitness = ea.get_solution('best', only_alive=False).fitness
+            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {len(ea.population)}")
+            runtime = time.time() - start_time
+            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
+            console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
+            a3cma.run_weights_only(method="record", weights=ea.get_solution('best', only_alive=False).genotype.brain_genotype, gecko_body=HPD.probability_matrices_to_graph(*NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)))
+            if(best_fitness >= 60 and config_overrides["DURATION"] is not None and config_overrides["DURATION"] < 100): # type: ignore
+                console.rule(f"Reached fitness threshold 2 with fitness {best_fitness:.4f}. Starting next stage.")
+                config_overrides["MULTI_EVAL_RUNS"] = 3
+                config_overrides["DURATION"] = 100
+            elif(best_fitness >= 20 and config_overrides["DURATION"] is not None and config_overrides["DURATION"] < 60): # type: ignore
+                console.rule(f"Reached fitness threshold 1 with fitness {best_fitness:.4f}. Starting next stage.")
+                config_overrides["MULTI_EVAL_RUNS"] = 3
+                config_overrides["DURATION"] = 60
+            save_graph_as_json(
+                
+                HPD.probability_matrices_to_graph(
+                    *NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)
+                ),
+                CWD / "output" / "genotypes" / f"best_body_genotype_gen{ea.current_generation}_fit{best_fitness:.4f}.json",
+            )
+
+        PROGRESS.remove_task(task)
+        PROGRESS.stop()
+
+        console.rule("Evolution process finished.")
+        console.log("Best Fitness:", ea.get_solution('best', only_alive=False).fitness)
+        console.log("Saving best individual...")
+        save_graph_as_json(
+            HPD.probability_matrices_to_graph(
+                *NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype)
+            ),
+            CWD / "output" / "genotypes" / f"best_body_genotype_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.json",
+        )
+
+
+
+    finally:
+        if PROGRESS:
+            PROGRESS.stop()
+        # close_pool()
+        console.log("Evolution process completed.")
+
+
+
+    return ea.get_solution('best', only_alive=False).fitness, ea.get_solution('best', only_alive=False).genotype.body_genotype, ea.get_solution('best', only_alive=False).genotype.brain_genotype, HPD.probability_matrices_to_graph(*NDE.forward(ea.get_solution('best', only_alive=False).genotype.body_genotype))
+
+
+# def main() -> None:
+#     """Entry point."""
+#     # ? ------------------------------------------------------------------ #
+#     genotype_size = 64
+#     type_p_genes = RNG.random(genotype_size).astype(np.float32)
+#     conn_p_genes = RNG.random(genotype_size).astype(np.float32)
+#     rot_p_genes = RNG.random(genotype_size).astype(np.float32)
+
+#     genotype = [
+#         type_p_genes,
+#         conn_p_genes,
+#         rot_p_genes,
+#     ]
+
+#     p_matrices = NDE.forward(genotype)
+
+#     # Decode the high-probability graph
+#     robot_graph: DiGraph[Any] = HPD.probability_matrices_to_graph(
+#         p_matrices[0],
+#         p_matrices[1],
+#         p_matrices[2],
+#     )
+
+#     # ? ------------------------------------------------------------------ #
+#     # Save the graph to a file
+#     save_graph_as_json(
+#         robot_graph,
+#         DATA / "robot_graph.json",
+#     )
+
+#     # ? ------------------------------------------------------------------ #
+#     # Default CONFIGURATION
+#     # "SIM_WORLD": OlympicArena,
+#     # "SEED": 42,
+#     # "SEGMENT_LENGTH": 250,
+#     # "POP_SIZE": 30,
+#     # "MAX_GENERATIONS": 125,
+#     # "TIME_LIMIT": 60*15, 
+#     # "HIDDEN_SIZE": 8,
+#     # "DURATION": 15,
+#     # "OUTPUT_DELTA": 0.05,
+#     # "NUM_HIDDEN_LAYERS": 1,
+#     # "FITNESS_MODE": "lateral_adjusted",
+#     # "UNIFORM_CROSSOVER": True,
+#     # "LATERAL_PENALTY_FACTOR": 0.1,
+#     # "MULTI_EVAL": True,
+#     # "INTERACTIVE_MODE": False,
+#     # "PARALLEL": True,
+#     # "RECORD_LAST": True,
+#     # "BATCH_SIZE": 25,
+#     # "RECORD_BATCH": True,
+#     # "DETAILED_LOGGING": True,
+#     # "DEVICE": "cpu",
+#     # "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
+#     # "MULTI_RUN_OPTIONS": {},
+#     # "MULTI_EVAL_RUNS": 1,
+#     # "RNG": np.random.default_rng(42),
+#     # "FITNESS_FUNCTION": None,  # Allow override
+#     # "GECKO_BODY": None,        # Allow override
+#     # "CONSOLE": None,
+#     # "MUTATION_PROBABILITY": 0.5,
+#     # "MUTATION_STDDEV": 0.1,
+#     # "SAVE_PLOTS": True
+#     # ? ------------------------------------------------------------------ #
+
+#     result = a3cma.evolve_using_cma_es(
+#         gecko_body=robot_graph,
+#         config_overrides={"MAX_GENERATIONS": 60},
+#     )
+
+#     fitness = result["fitness"]
+#     tracker = result["tracker"]
+
+#     show_xpos_history(tracker.history["xpos"][0])
+
+#     # fitness = fitness_function(tracker.history["xpos"][0])
+#     msg = f"Fitness of generated robot: {fitness}"
+#     console.log(msg)
+
+if __name__ == "__main__":
+    body_evolution()
