@@ -33,6 +33,8 @@ import math
 import gc
 import sys
 
+from ariel.simulation.controllers.controller import Controller
+
 from typing import cast
 
 # Local libraries
@@ -173,6 +175,20 @@ def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
     return math.atan2(R[1, 0], R[0, 0])  # Z-up convention
 
 
+def sample_glorot_flat(weight_shapes: list[tuple[int, int]], rng: np.random.Generator) -> np.ndarray:
+    """
+    Sample weights using Glorot/Xavier initialization for tanh networks.
+    For each weight matrix with shape (fan_in, fan_out):
+    range = ±sqrt(6 / (fan_in + fan_out))
+    """
+    parts = []
+    for fan_in, fan_out in weight_shapes:
+        limit = np.sqrt(6.0 / (fan_in + fan_out))
+        W = rng.uniform(-limit, limit, size=(fan_in, fan_out)).astype(np.float32)
+        parts.append(W.reshape(-1))
+    return np.concatenate(parts, dtype=np.float32)
+
+
 def convert_tracker_to_history(tracker: Tracker) -> list:
     """
     Convert tracker history to the format expected by fitness functions.
@@ -245,10 +261,6 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     mujoco.set_mjcb_control(None)
 
     model, data, world, tracker = initialize_world_and_robot()
-
-    # Import Controller class
-    from ariel.simulation.controllers.controller import Controller
-
     # Define controller callback
     def nn_controller_callback(m, d):
         outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu)
@@ -258,6 +270,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     ctrl = Controller(
         controller_callback_function=nn_controller_callback,
         tracker=tracker,
+        alpha=CONFIG["OUTPUT_DELTA"],
     )
 
     # Setup tracker before simulation
@@ -804,16 +817,17 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
         if background_path.exists():
             background_path.unlink()
 
-def create_individual(total_params: int) -> Individual:
-    # Create a random individual with weights in [-0.75, 0.75]
-    genotype = np.random.uniform(-0.75, 0.75, size=total_params).astype(np.float32)
+def create_individual(weight_shapes: list[tuple[int, int]]) -> Individual:
+    """Create a random individual with Glorot/Xavier weight initialization."""
+    rng = CONFIG["RNG"]
+    genotype = sample_glorot_flat(weight_shapes, rng)
     ind = Individual()
     ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
     ind.requires_eval = True
     return ind
 
 
-def analyze_trajectory_with_plots(weights: np.ndarray, save_plots: bool = True, show_comparison: bool = True) -> dict:
+def analyze_trajectory_with_plots(weights: np.ndarray, save_plots: bool = True) -> dict:
     """
     Utility function to analyze a genotype and create detailed plots.
     Returns a dictionary with analysis results.
@@ -832,7 +846,7 @@ def analyze_trajectory_with_plots(weights: np.ndarray, save_plots: bool = True, 
     
     # Create plots
     if save_plots:
-        show_qpos_history(history, save=True, show_both=show_comparison)
+        show_qpos_history(history, save=True)
     
     # Return analysis results
     results = {
@@ -849,12 +863,13 @@ def analyze_trajectory_with_plots(weights: np.ndarray, save_plots: bool = True, 
     console.log(f"Analysis complete - Fitness: {fit:.5f}")
     return results
 
-def create_population(total_params: int, pop_size: int, pool = None) -> Population:
-    console.log(f"WORLD: {CONFIG['SIM_WORLD'].__name__}, POP_SIZE: {pop_size}, TOTAL_PARAMS: {total_params}, PARALLEL: {CONFIG['PARALLEL']}, PARALLEL_CORES: {CONFIG['PARALLEL_CORES']}")
+def create_population(weight_shapes: list[tuple[int, int]], pop_size: int, pool=None) -> Population:
+    """Create population using Glorot/Xavier weight initialization."""
+    console.log(f"WORLD: {CONFIG['SIM_WORLD'].__name__}, POP_SIZE: {pop_size}, WEIGHT_SHAPES: {weight_shapes}, PARALLEL: {CONFIG['PARALLEL']}, PARALLEL_CORES: {CONFIG['PARALLEL_CORES']}")
     if pool:
-        return pool.map(create_individual, [total_params] * pop_size)
+        return pool.map(create_individual, [weight_shapes] * pop_size)
     else:
-        return [create_individual(total_params) for _ in range(pop_size)]
+        return [create_individual(weight_shapes) for _ in range(pop_size)]
 
 def parent_selection(population: Population) -> Population:
     """Tournament selection"""
@@ -898,8 +913,8 @@ class Crossover:
         child2 = parent_j_arr.copy()
         child1[crossover_point:] = parent_j_arr[crossover_point:]
         child2[crossover_point:] = parent_i_arr[crossover_point:]
-        child1 = child1.reshape(parent_i_arr_shape).astype(int).tolist()
-        child2 = child2.reshape(parent_j_arr_shape).astype(int).tolist()
+        child1 = child1.reshape(parent_i_arr_shape).astype(float).tolist()
+        child2 = child2.reshape(parent_j_arr_shape).astype(float).tolist()
         return child1, child2
     
     @staticmethod
@@ -920,8 +935,8 @@ class Crossover:
         child2 = parent_j_arr.copy()
         child1[mask] = parent_j_arr[mask]
         child2[mask] = parent_i_arr[mask]
-        child1 = child1.reshape(parent_i_arr_shape).astype(int).tolist()
-        child2 = child2.reshape(parent_j_arr_shape).astype(int).tolist()
+        child1 = child1.reshape(parent_i_arr_shape).astype(float).tolist()
+        child2 = child2.reshape(parent_j_arr_shape).astype(float).tolist()
         return child1, child2
 
 def crossover_individuals(ind1 : Individual, ind2: Individual, uniform_crossover: bool = False) -> tuple[Individual, Individual]:
@@ -969,6 +984,8 @@ def crossover_individuals(ind1 : Individual, ind2: Individual, uniform_crossover
 
 def crossover_parallel(population: Population, pool) -> Population:
     parents = [ind for ind in population if ind.tags.get('ps', False)]
+    #shuffle parents to avoid bias
+    random.shuffle(parents)
     if pool and len(parents) >= 2:
         children = []
         parent_pairs = [(parents[i], parents[i + 1]) for i in range(0, len(parents) - 1, 2)]
@@ -988,27 +1005,47 @@ def crossover_parallel(population: Population, pool) -> Population:
 
 def mutate_float(
     individual: list[float],
+    input_size: int,
+    hidden_size: int,
+    output_size: int,
+    num_hidden_layers: int,
     mutation_probability: float = 0.5,
-    min_val: float = -1.0,
-    max_val: float = 1.0,
     stddev: float = 0.1,
 ) -> list[float]:
-    mutated = individual.copy()
+    """
+    Mutate weights using per-layer bounds based on Glorot initialization.
+    Each layer gets its own mutation scale and clamping bounds.
+    """
     rng = CONFIG['RNG']
-    for i in range(len(mutated)):
-        if rng.random() < mutation_probability:
-            mutated[i] += rng.normal(0, stddev)
-            mutated[i] = max(min_val, min(max_val, mutated[i]))
-    return mutated
+    arr = np.array(individual, dtype=np.float32, copy=True)
 
-def mutate_individual(ind: Individual) -> Individual:
+    # Reconstruct per-layer views (same logic as in controller)
+    layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
+    shapes = [(layer_sizes[i], layer_sizes[i+1]) for i in range(len(layer_sizes)-1)]
+    sizes = [a*b for a, b in shapes]
+    idx = np.cumsum([0] + sizes)
 
+    for li, (fan_in, fan_out) in enumerate(shapes):
+        start, end = idx[li], idx[li+1]
+        view = arr[start:end].reshape(fan_in, fan_out)
+        limit = np.sqrt(6.0 / (fan_in + fan_out))
+        sigma = stddev * limit  # Scale mutation by the layer's initialization range
+        mask = rng.random(view.shape) < mutation_probability
+        view[mask] = view[mask] + rng.normal(0.0, sigma, size=mask.sum()).astype(np.float32)
+        # Clamp per layer to 3x the initialization range
+        view[...] = np.clip(view, -3*limit, 3*limit)
+
+    return arr.astype(float).tolist()
+
+def mutate_individual_with_shape(ind: Individual, input_size, hidden_size, output_size, num_hidden_layers, mutation_probability, stddev) -> Individual:
     mutated = mutate_float(
         individual=cast("list[float]", ind.genotype),
-        mutation_probability=CONFIG['MUTATION_PROBABILITY'],
-        min_val=-1.0,
-        max_val=1.0,
-        stddev=CONFIG['MUTATION_STDDEV'],
+        input_size=input_size,
+        hidden_size=hidden_size,
+        output_size=output_size,
+        num_hidden_layers=num_hidden_layers,
+        mutation_probability=mutation_probability,
+        stddev=stddev,
     )
     ind.genotype = mutated
     ind.tags = {'mut': False}
@@ -1017,8 +1054,26 @@ def mutate_individual(ind: Individual) -> Individual:
 
 def mutation(population: Population, pool) -> Population:
     to_mutate = [ind for ind in population if ind.tags.get('mut', False)]
+    # Get network shape info from CONFIG (should be set in evolve_using_ariel_ec)
+    input_size = CONFIG.get("INPUT_SIZE")
+    hidden_size = CONFIG["HIDDEN_SIZE"]
+    output_size = CONFIG.get("OUTPUT_SIZE")
+    num_hidden_layers = CONFIG["NUM_HIDDEN_LAYERS"]
+    mutation_probability = CONFIG['MUTATION_PROBABILITY']
+    stddev = CONFIG['MUTATION_STDDEV']
     if pool and to_mutate:
-        mutated_inds = pool.map(mutate_individual, to_mutate)
+        # Use a wrapper to pass shape info
+        import functools
+        mutate_fn = functools.partial(
+            mutate_individual_with_shape,
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            num_hidden_layers=num_hidden_layers,
+            mutation_probability=mutation_probability,
+            stddev=stddev,
+        )
+        mutated_inds = pool.map(mutate_fn, to_mutate)
         # Replace mutated individuals in population
         mutate_idx = [i for i, ind in enumerate(population) if ind.tags.get('mut', False)]
         for idx, mutated in zip(mutate_idx, mutated_inds):
@@ -1026,7 +1081,15 @@ def mutation(population: Population, pool) -> Population:
     elif not pool:
         for i, ind in enumerate(population):
             if ind.tags.get('mut', False):
-                population[i] = mutate_individual(ind)  # Fix: Update the population directly
+                population[i] = mutate_individual_with_shape(
+                    ind,
+                    input_size,
+                    hidden_size,
+                    output_size,
+                    num_hidden_layers,
+                    mutation_probability,
+                    stddev,
+                )
     return population
 
 def survivor_selection(population: Population) -> Population:
@@ -1094,6 +1157,10 @@ def evolve_using_ariel_ec(
     layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
     weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
     total_params = sum(a * b for a, b in weight_shapes)
+    
+    # Set CONFIG values needed for per-layer mutation
+    CONFIG["INPUT_SIZE"] = input_size
+    CONFIG["OUTPUT_SIZE"] = output_size
     class EAPoolStep(EAStep):
         def __init__(self, name: str, operation, pool=None):
             super().__init__(name, operation)
@@ -1104,7 +1171,7 @@ def evolve_using_ariel_ec(
             return self.operation(*args, **kwargs)
     evolution_start_time = time.time()
     try:
-        pop: Population = create_population(total_params=total_params, pop_size=CONFIG["POP_SIZE"], pool=pool)
+        pop: Population = create_population(weight_shapes=weight_shapes, pop_size=CONFIG["POP_SIZE"], pool=pool)
         pop = evaluate_pop(pop, pool=pool)
         console.log(f"Fitness Mode: {CONFIG['FITNESS_MODE']}, Population Size: {len(pop)}, Total Params: {total_params}")
         ops = [
