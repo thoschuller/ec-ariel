@@ -92,6 +92,19 @@ NEURALNET_EVO_CONFIG = {
     "SAVE_PLOTS": False
 }
 
+# --- Pool management --- #
+GlobalPool = None
+def get_pool():
+    global GlobalPool
+    if GlobalPool is None and NEURALNET_EVO_CONFIG["PARALLEL"] and NEURALNET_EVO_CONFIG["PARALLEL_CORES"] > 1:
+        GlobalPool = multiprocessing.Pool(processes=NEURALNET_EVO_CONFIG["PARALLEL_CORES"])
+    return GlobalPool
+def close_pool():
+    global GlobalPool
+    if GlobalPool is not None:
+        GlobalPool.close()
+        GlobalPool.join()
+        GlobalPool = None
 
 def set_config(overrides: dict):
     if overrides:
@@ -886,6 +899,7 @@ def evolve_using_cma_es(
         set_fitness_function(fitness_function)
     if gecko_body:
         set_gecko_body(gecko_body)
+    pool = pool if pool is not None else get_pool()
     console.rule("[green]Starting CMA-ES Run")
     model, data, world, tracker = initialize_world_and_robot()
     input_size = model.nq
@@ -914,8 +928,6 @@ def evolve_using_cma_es(
     best_fitness = -np.inf
     best_solution = None
     
-    if pool is None and NEURALNET_EVO_CONFIG["PARALLEL"] and NEURALNET_EVO_CONFIG["PARALLEL_CORES"] > 1:
-        pool = multiprocessing.Pool(processes=NEURALNET_EVO_CONFIG["PARALLEL_CORES"])
     try:
         interactive_mode = NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]
         multi_run_options = NEURALNET_EVO_CONFIG["MULTI_RUN_OPTIONS"]
@@ -1001,10 +1013,7 @@ def evolve_using_cma_es(
             else:
                 progress.stop()
     finally:
-        if pool is not None:
-        pool.close()
-        pool.join()
-        pool = None
+        pass  # Pool is managed externally
     
     best_weights = np.array(best_solution, dtype=np.float32)
     if NEURALNET_EVO_CONFIG["RECORD_LAST"]:
