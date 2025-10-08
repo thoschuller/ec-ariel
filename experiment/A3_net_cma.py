@@ -82,12 +82,10 @@ NEURALNET_EVO_CONFIG = {
     "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
     "MULTI_RUN_OPTIONS": {},
     "MULTI_EVAL_RUNS": 1,
-    "RNG": np.random.default_rng(42),
-    "FITNESS_FUNCTION": None,  # Allow override
-    "GECKO_BODY": None,        # Allow override
+    "RNG": np.random.default_rng(),
+    "FITNESS_FUNCTION": None,
+    "GECKO_BODY": None,
     "CONSOLE": None,
-    "MUTATION_PROBABILITY": 0.5,
-    "MUTATION_STDDEV": 0.1,
     "SAVE_PLOTS": False
 }
 
@@ -296,12 +294,6 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None, geck
             viewer.launch(model, data)
         case "headless": # for evaluation-only sessions
             # Use the project's simple_runner helper instead of calling mj_step directly.
-            # Convert the number of simulation steps to seconds using the model timestep.
-            try:
-                timestep = float(model.opt.timestep)
-            except Exception:
-                # Fall back to a reasonable default timestep if unavailable
-                timestep = 0.002
             duration_seconds = NEURALNET_EVO_CONFIG["DURATION"]
             simple_runner(model, data, duration=duration_seconds)
         case _:
