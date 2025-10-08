@@ -33,11 +33,13 @@ from rich.prompt import Prompt
 import math
 import gc
 import sys
+import warnings
 
 from typing import cast
 
 # CMA-ES library
 import cma
+from functools import partial
 
 # Local libraries
 from ariel.utils.renderers import tracking_video_renderer, single_frame_renderer
@@ -49,18 +51,21 @@ from ariel.utils.tracker import Tracker
 from ariel.ec.a001 import Individual, JSONIterable
 # import prebuilt robot phenotypes
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
+from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph 
+from ariel.simulation.controllers.controller import Controller
+from networkx import DiGraph  # Add this import
 
 import random
 
-
 # --- Configurable global settings --- #
-CONFIG = {
+global NEURALNET_EVO_CONFIG
+NEURALNET_EVO_CONFIG = {
     "SIM_WORLD": OlympicArena,
     "SEED": 42,
     "SEGMENT_LENGTH": 250,
-    "POP_SIZE": 40,
-    "MAX_GENERATIONS": 60,
-    "TIME_LIMIT": 60*15, # expected duration is 7-8 minutes
+    "POP_SIZE": 30,
+    "MAX_GENERATIONS": 125,
+    "TIME_LIMIT": 60*8, 
     "HIDDEN_SIZE": 8,
     "DURATION": 15,
     "OUTPUT_DELTA": 0.05,
@@ -68,13 +73,12 @@ CONFIG = {
     "FITNESS_MODE": "lateral_adjusted",
     "UNIFORM_CROSSOVER": True,
     "LATERAL_PENALTY_FACTOR": 0.1,
-    "MULTI_EVAL": True,
     "INTERACTIVE_MODE": False,
     "PARALLEL": True,
-    "RECORD_LAST": True,
-    "BATCH_SIZE": 100,
-    "RECORD_BATCH": True,
-    "DETAILED_LOGGING": True,
+    "RECORD_LAST": False,
+    "BATCH_SIZE": 25,
+    "RECORD_BATCH": False,
+    "DETAILED_LOGGING": False,
     "DEVICE": "cpu",
     "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
     "MULTI_RUN_OPTIONS": {},
@@ -85,37 +89,38 @@ CONFIG = {
     "CONSOLE": None,
     "MUTATION_PROBABILITY": 0.5,
     "MUTATION_STDDEV": 0.1,
+    "SAVE_PLOTS": False
 }
 
 # --- Pool management --- #
-GLOBAL_POOL = None
+GlobalPool = None
 def get_pool():
-    global GLOBAL_POOL
-    if GLOBAL_POOL is None and CONFIG["PARALLEL"] and CONFIG["PARALLEL_CORES"] > 1:
-        GLOBAL_POOL = multiprocessing.Pool(processes=CONFIG["PARALLEL_CORES"])
-    return GLOBAL_POOL
+    global GlobalPool
+    if GlobalPool is None and NEURALNET_EVO_CONFIG["PARALLEL"] and NEURALNET_EVO_CONFIG["PARALLEL_CORES"] > 1:
+        GlobalPool = multiprocessing.Pool(processes=NEURALNET_EVO_CONFIG["PARALLEL_CORES"])
+    return GlobalPool
 def close_pool():
-    global GLOBAL_POOL
-    if GLOBAL_POOL is not None:
-        GLOBAL_POOL.close()
-        GLOBAL_POOL.join()
-        GLOBAL_POOL = None
+    global GlobalPool
+    if GlobalPool is not None:
+        GlobalPool.close()
+        GlobalPool.join()
+        GlobalPool = None
 
 def set_config(overrides: dict):
     if overrides:
-        CONFIG.update(overrides)
+        NEURALNET_EVO_CONFIG.update(overrides)
 
 def set_fitness_function(func):
-    CONFIG["FITNESS_FUNCTION"] = func
+    NEURALNET_EVO_CONFIG["FITNESS_FUNCTION"] = func
 
-def set_gecko_body(func):
-    CONFIG["GECKO_BODY"] = func
+def set_gecko_body(body):
+    NEURALNET_EVO_CONFIG["GECKO_BODY"] = body
 
 def get_rng():
-    return CONFIG["RNG"]
+    return NEURALNET_EVO_CONFIG["RNG"]
 
 def get_stats_csv_path():
-    path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{CONFIG['FITNESS_MODE']}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
+    path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{NEURALNET_EVO_CONFIG['FITNESS_MODE']}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
     path.parent.mkdir(exist_ok=True)
     return path
 
@@ -145,14 +150,14 @@ log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)  # line-buffe
 dual_writer = DualWriter(sys.stdout, log_file)
 
 # Fancy console messages and progress bars
-if CONFIG["CONSOLE"] is None:
+if NEURALNET_EVO_CONFIG["CONSOLE"] is None:
     install()
     # console = Console(file=dual_writer, emoji=False, markup=False)
     console = Console()
-    CONFIG["CONSOLE"] = console
+    NEURALNET_EVO_CONFIG["CONSOLE"] = console
 else:
-    console = cast(Console, CONFIG["CONSOLE"])
-console.log(f"Experiment started with SEED={CONFIG['SEED']}, DEVICE={CONFIG['DEVICE']}, PARALLEL={CONFIG['PARALLEL']}, PARALLEL_CORES={CONFIG['PARALLEL_CORES']}")
+    console = cast(Console, NEURALNET_EVO_CONFIG["CONSOLE"])
+console.log(f"Experiment started with SEED={NEURALNET_EVO_CONFIG['SEED']}, DEVICE={NEURALNET_EVO_CONFIG['DEVICE']}, PARALLEL={NEURALNET_EVO_CONFIG['PARALLEL']}, PARALLEL_CORES={NEURALNET_EVO_CONFIG['PARALLEL_CORES']}")
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking when running non-interactively
 
@@ -194,7 +199,7 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     # `weights` is expected to be a flat numpy array of parameters (float)
 
     # Dynamically unpack weights for multiple hidden layers
-    layer_sizes = [input_size] + [hidden_size] * CONFIG["NUM_HIDDEN_LAYERS"] + [output_size]
+    layer_sizes = [input_size] + [hidden_size] * NEURALNET_EVO_CONFIG["NUM_HIDDEN_LAYERS"] + [output_size]
     weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
     weight_sizes = [a * b for a, b in weight_shapes]
     indices = np.cumsum([0] + weight_sizes)
@@ -203,7 +208,7 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     # Forward pass
     inputs = data.qpos
     x = inputs
-    for i in range(CONFIG["NUM_HIDDEN_LAYERS"]):
+    for i in range(NEURALNET_EVO_CONFIG["NUM_HIDDEN_LAYERS"]):
         x = np.tanh(np.dot(x, ws[i]))
     outputs = np.tanh(np.dot(x, ws[-1]))
     outputs = outputs * np.pi * 0.5  # Scale to [-0.5 * pi, 0.5 * pi]
@@ -211,13 +216,18 @@ def numpy_nn_controller_move_with_weights(model, data: mujoco.MjData, weights: n
     return outputs
 
 
-def initialize_world_and_robot():
+def initialize_world_and_robot(gecko_body=None):
     mujoco.set_mjcb_control(None)
-    world = CONFIG["SIM_WORLD"]()
-    gecko_core = CONFIG["GECKO_BODY"]() if CONFIG["GECKO_BODY"] else gecko()
-    if CONFIG["SIM_WORLD"] == SimpleFlatWorld:
+    world = NEURALNET_EVO_CONFIG["SIM_WORLD"]()
+    gecko_core = gecko_body if gecko_body is not None else NEURALNET_EVO_CONFIG["GECKO_BODY"] if NEURALNET_EVO_CONFIG["GECKO_BODY"] else gecko()
+    
+    # If gecko_core is a DiGraph (robot_graph), reconstruct the spec from it
+    if isinstance(gecko_core, DiGraph):
+        gecko_core = construct_mjspec_from_graph(gecko_core)
+    
+    if NEURALNET_EVO_CONFIG["SIM_WORLD"] == SimpleFlatWorld:
         spawn_pos = [0, 0, 0]
-    elif CONFIG["SIM_WORLD"] == OlympicArena:
+    elif NEURALNET_EVO_CONFIG["SIM_WORLD"] == OlympicArena:
         spawn_pos = [-0.8, 0, 0.1]
     else:
         spawn_pos = [0, 0, 1]
@@ -252,7 +262,7 @@ def convert_tracker_to_history(tracker: Tracker) -> list:
     
     return history
 
-def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> list:
+def run_bot_session(weights: np.ndarray, method: str, options: dict = None, gecko_body=None) -> list:
     """
     Run a single simulation session with given weights and method.
     """
@@ -260,14 +270,11 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
 
-    model, data, world, tracker = initialize_world_and_robot()
-
-    # Import Controller class
-    from ariel.simulation.controllers.controller import Controller
+    model, data, world, tracker = initialize_world_and_robot(gecko_body)
 
     # Define controller callback
     def nn_controller_callback(m, d):
-        outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, CONFIG["HIDDEN_SIZE"], model.nu)
+        outputs = numpy_nn_controller_move_with_weights(m, d, weights, model.nq, NEURALNET_EVO_CONFIG["HIDDEN_SIZE"], model.nu)
         return outputs
 
     # Instantiate Controller with tracker
@@ -294,7 +301,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             tracking_video_renderer(
                 model,
                 data,
-                duration=10 + CONFIG['DURATION'],
+                duration=10 + NEURALNET_EVO_CONFIG['DURATION'],
                 video_recorder=video_recorder,
             )
             mujoco.set_mjcb_control(None)
@@ -309,7 +316,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
             except Exception:
                 # Fall back to a reasonable default timestep if unavailable
                 timestep = 0.002
-            duration_seconds = CONFIG["DURATION"]
+            duration_seconds = NEURALNET_EVO_CONFIG["DURATION"]
             simple_runner(model, data, duration=duration_seconds)
         case _:
             raise ValueError(f"Unknown method: {method}")
@@ -317,7 +324,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict = None) -> l
     mujoco.set_mjcb_control(None)
 
     # Convert tracker history to expected format
-    return convert_tracker_to_history(tracker)
+    return tracker
 
 def calc_origin_distance(history: list) -> float:
     """
@@ -353,8 +360,8 @@ def calc_median_segment_lateral_distance(history: list) -> float:
     x0, y0, _, yaw0 = arr[0]
     h0 = np.array([np.cos(yaw0), np.sin(yaw0)])
     segment_laterals = []
-    for i in range(0, len(arr), CONFIG['SEGMENT_LENGTH']):
-        segment = arr[i:i + CONFIG['SEGMENT_LENGTH']]
+    for i in range(0, len(arr), NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']):
+        segment = arr[i:i + NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']]
         if len(segment) < 2:
             continue
         sx0, sy0, _, _ = segment[0]
@@ -390,8 +397,8 @@ def calc_median_segment_forward_distance(history: list) -> float:
     _, _, _, yaw0 = arr[0]
     h0_perp = np.array([-np.sin(yaw0), np.cos(yaw0)])
     segment_forwards = []
-    for i in range(0, len(arr), CONFIG['SEGMENT_LENGTH']):
-        segment = arr[i:i + CONFIG['SEGMENT_LENGTH']]
+    for i in range(0, len(arr), NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']):
+        segment = arr[i:i + NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']]
         if len(segment) < 2:
             continue
         sx0, sy0, _, _ = segment[0]
@@ -447,8 +454,8 @@ def calc_median_segment_forward_towards_target(history: list, target: list | np.
     if target_dir is None:
         return 0.0
     segment_forwards = []
-    for i in range(0, len(arr), CONFIG['SEGMENT_LENGTH']):
-        segment = arr[i:i + CONFIG['SEGMENT_LENGTH']]
+    for i in range(0, len(arr), NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']):
+        segment = arr[i:i + NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']]
         if len(segment) < 2:
             continue
         sx0, sy0 = segment[0][:2]
@@ -486,7 +493,7 @@ def time_to_reach_target_seconds(history: list, target: list | np.ndarray) -> fl
             # map index to seconds using CONFIG['DURATION'] and number of samples
             # use (len(arr)-1) as denominator so last index maps to full duration
             denom = max(1, len(arr) - 1)
-            t = (i / denom) * float(CONFIG.get('DURATION', 0.0))
+            t = (i / denom) * float(NEURALNET_EVO_CONFIG.get('DURATION', 0.0))
             return float(t)
     return None
 
@@ -526,8 +533,8 @@ def calc_median_segment_lateral_relative_to_target(history: list, target: list |
     if target_dir is None:
         return 0.0
     segment_laterals = []
-    for i in range(0, len(arr), CONFIG['SEGMENT_LENGTH']):
-        segment = arr[i:i + CONFIG['SEGMENT_LENGTH']]
+    for i in range(0, len(arr), NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']):
+        segment = arr[i:i + NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']]
         if len(segment) < 2:
             continue
         sx0, sy0 = segment[0][:2]
@@ -551,9 +558,9 @@ def calc_median_segment_distance(history: list) -> float:
     total_dir = total_disp / total_norm
 
     projected_segment_fits = []
-    for i in range(0, len(history), CONFIG['SEGMENT_LENGTH']):
-        segment = history[i:i + CONFIG['SEGMENT_LENGTH']]
-        if len(segment) < CONFIG['SEGMENT_LENGTH']:
+    for i in range(0, len(history), NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']):
+        segment = history[i:i + NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']]
+        if len(segment) < NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']:
             continue
         start_pos = np.array(segment[0][:2])
         end_pos = np.array(segment[-1][:2])
@@ -570,13 +577,13 @@ def calc_median_segment_distance(history: list) -> float:
 def fitness(history: list) -> float:
 
 
-    segment_count = len(history) // CONFIG['SEGMENT_LENGTH']
+    segment_count = len(history) // NEURALNET_EVO_CONFIG['SEGMENT_LENGTH']
     origin_distance = calc_origin_distance(history)
     normalized_origin_distance = origin_distance / segment_count if segment_count > 0 else 0.0
     # Allow override
-    if CONFIG["FITNESS_FUNCTION"]:
-        return CONFIG["FITNESS_FUNCTION"](history)
-    match CONFIG["FITNESS_MODE"]:
+    if NEURALNET_EVO_CONFIG["FITNESS_FUNCTION"]:
+        return NEURALNET_EVO_CONFIG["FITNESS_FUNCTION"](history)
+    match NEURALNET_EVO_CONFIG["FITNESS_MODE"]:
         case "modern":
             arr = np.asarray(history, dtype=np.float32)
             x0, y0, z0, yaw0 = arr[0]
@@ -605,7 +612,7 @@ def fitness(history: list) -> float:
         case "lateral_adjusted":
             # For OlympicArena prefer movement towards a fixed target point instead
             # of the general 'forward' direction. The chosen target is [5, 0, 0.5].
-            if CONFIG["SIM_WORLD"] == OlympicArena:
+            if NEURALNET_EVO_CONFIG["SIM_WORLD"] == OlympicArena:
                 target = np.array([5.0, 0.0, 0.5], dtype=np.float32)
                 # compute forward progress towards the fixed target and scale to a
                 # dimensionless fraction in [0, 1] where 0 == start and 1 == finish
@@ -626,7 +633,7 @@ def fitness(history: list) -> float:
                 )
 
                 # final fitness: fraction toward goal minus scaled lateral penalty
-                fit = max(0.0, fraction_towards_target - normalized_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"])
+                fit = max(0.0, fraction_towards_target - normalized_lateral_distance * NEURALNET_EVO_CONFIG["LATERAL_PENALTY_FACTOR"])
                 # time bonus if target reached: bonus = max(0, 1 - (1/120) * t)
                 t_reach = time_to_reach_target_seconds(history, target)
                 if t_reach is not None:
@@ -637,9 +644,9 @@ def fitness(history: list) -> float:
                 normalized_forward_distance = forward_distance / segment_count if segment_count > 0 else 0.0
                 lateral_distance = calc_lateral_distance(history)
                 normalized_lateral_distance = abs(lateral_distance) / segment_count if segment_count > 0 else 0.0
-                fit = max(0.0, normalized_forward_distance - normalized_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"])
+                fit = max(0.0, normalized_forward_distance - normalized_lateral_distance * NEURALNET_EVO_CONFIG["LATERAL_PENALTY_FACTOR"])
         case "lateral_median":
-            if CONFIG["SIM_WORLD"] == OlympicArena:
+            if NEURALNET_EVO_CONFIG["SIM_WORLD"] == OlympicArena:
                 target = np.array([5.0, 0.0, 0.5], dtype=np.float32)
                 median_forward_distance = calc_median_segment_forward_towards_target(history, target)
                 median_lateral_distance = abs(calc_median_segment_lateral_relative_to_target(history, target))
@@ -653,7 +660,7 @@ def fitness(history: list) -> float:
                 normalized_median_lateral = (
                     median_lateral_distance / target_distance if target_distance > 0.0 else 0.0
                 )
-                fit = max(0.0, (median_fraction - normalized_median_lateral * CONFIG["LATERAL_PENALTY_FACTOR"]))
+                fit = max(0.0, (median_fraction - normalized_median_lateral * NEURALNET_EVO_CONFIG["LATERAL_PENALTY_FACTOR"]))
                 t_reach = time_to_reach_target_seconds(history, target)
                 if t_reach is not None:
                     bonus = max(0.0, 1.0 - (1.0 / 120.0) * float(t_reach))
@@ -661,38 +668,42 @@ def fitness(history: list) -> float:
             else:
                 median_forward_distance = calc_median_segment_forward_distance(history)
                 median_lateral_distance = abs(calc_median_segment_lateral_distance(history))
-                fit = max(0.0, (median_forward_distance - median_lateral_distance * CONFIG["LATERAL_PENALTY_FACTOR"]))
+                fit = max(0.0, (median_forward_distance - median_lateral_distance * NEURALNET_EVO_CONFIG["LATERAL_PENALTY_FACTOR"]))
         case _:
-            raise ValueError(f"Unknown FITNESS_MODE: {CONFIG['FITNESS_MODE']}")
+            raise ValueError(f"Unknown FITNESS_MODE: {NEURALNET_EVO_CONFIG['FITNESS_MODE']}")
     return fit
 
 def evaluate_ind(ind: Individual) -> float:
     weights = np.array(ind.genotype, dtype=np.float32)
-    runs = CONFIG["MULTI_EVAL_RUNS"]
+    runs = NEURALNET_EVO_CONFIG["MULTI_EVAL_RUNS"]
     if runs > 1:
         fits = []
         for _ in range(runs):
-            history = run_bot_session(weights, method="headless")
+            tracker = run_bot_session(weights, method="headless")
+            history = convert_tracker_to_history(tracker)
             fits.append(fitness(history))
         fit = float(np.mean(fits))
     else:
-        history = run_bot_session(weights, method="headless")
+        tracker = run_bot_session(weights, method="headless")
+        history = convert_tracker_to_history(tracker)
         fit = fitness(history)
     return fit
 
-def evaluate_individual_isolated(genotype_list: list) -> float:
+def evaluate_individual_isolated(genotype_list: list, gecko_body=None) -> float:
     mujoco.set_mjcb_control(None)
     weights = np.array(genotype_list, dtype=np.float32)
     try:
-        runs = CONFIG["MULTI_EVAL_RUNS"]
+        runs = NEURALNET_EVO_CONFIG["MULTI_EVAL_RUNS"]
         if runs > 1:
             fits = []
             for _ in range(runs):
-                history = run_bot_session(weights, method="headless")
+                tracker = run_bot_session(weights, method="headless", gecko_body=gecko_body)
+                history = convert_tracker_to_history(tracker)
                 fits.append(fitness(history))
             fit = float(np.mean(fits))
         else:
-            history = run_bot_session(weights, method="headless")
+            tracker = run_bot_session(weights, method="headless", gecko_body=gecko_body)
+            history = convert_tracker_to_history(tracker)
             fit = fitness(history)
         return fit
     except Exception as e:
@@ -702,8 +713,8 @@ def evaluate_individual_isolated(genotype_list: list) -> float:
         mujoco.set_mjcb_control(None)
 
 
-def cma_evaluate_individual(genotype_array: np.ndarray) -> float:
-    fit = evaluate_individual_isolated(genotype_array.tolist())
+def cma_evaluate_individual(genotype_array: np.ndarray, gecko_body=None) -> float:
+    fit = evaluate_individual_isolated(genotype_array.tolist(), gecko_body=gecko_body)
     if fit == -1000.0:
         return 1000.0  # penalty for minimization
     return -fit  # negate for CMA-ES minimization
@@ -728,7 +739,7 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
 
     # Initialize world to get the background
     mujoco.set_mjcb_control(None)
-    world = CONFIG["SIM_WORLD"]()
+    world = NEURALNET_EVO_CONFIG["SIM_WORLD"]()
     model = world.spec.compile()
     data = mujoco.MjData(model)
 
@@ -754,9 +765,9 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
     pos_data = np.array(history)[:, :3]  # Only take x, y, z coordinates
 
     # Get spawn position for coordinate conversion
-    if CONFIG["SIM_WORLD"] == SimpleFlatWorld:
+    if NEURALNET_EVO_CONFIG["SIM_WORLD"] == SimpleFlatWorld:
         spawn_pos = [0, 0, 0]
-    elif CONFIG["SIM_WORLD"] == OlympicArena:
+    elif NEURALNET_EVO_CONFIG["SIM_WORLD"] == OlympicArena:
         spawn_pos = [-0.8, 0, 0.1]
     else:
         spawn_pos = [0, 0, 1]
@@ -786,14 +797,14 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
     # Add labels and title with fitness information
     background_axis.set_xlabel("X Position (pixels)")
     background_axis.set_ylabel("Y Position (pixels)")
-    bg_title = f'Robot Trajectory - Fitness ({CONFIG["FITNESS_MODE"]}): {fit:.5f}'
+    bg_title = f'Robot Trajectory - Fitness ({NEURALNET_EVO_CONFIG["FITNESS_MODE"]}): {fit:.5f}'
     bg_title += f'\nOrigin Distance: {origin_distance:.3f}, Median Segment Distance: {median_segment_distance:.5f}'
     background_axis.set_title(bg_title, fontsize=12)
     background_axis.legend()
 
     plt.tight_layout()
 
-    if CONFIG["INTERACTIVE_MODE"]:
+    if NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]:
         plt.show(block=False)
     plt.pause(0.1)
 
@@ -812,9 +823,23 @@ def show_qpos_history(history: dict, save: bool = False) -> None:
         if background_path.exists():
             background_path.unlink()
 
+def get_controller_from_weights(weights: np.ndarray) -> Controller:
+    """
+    Return a controller that uses the given weights.
+    """
+    def nn_controller_callback(m, d):
+        outputs = numpy_nn_controller_move_with_weights(m, d, weights, m.nq, CONFIG["HIDDEN_SIZE"], m.nu)
+        return outputs
+
+    ctrl = Controller(
+        controller_callback_function=nn_controller_callback,
+        alpha=CONFIG["OUTPUT_DELTA"],
+    )
+    return ctrl
+
 def create_individual(weight_shapes: list[tuple[int, int]]) -> Individual:
     """Create a random individual with Glorot/Xavier weight initialization."""
-    rng = CONFIG["RNG"]
+    rng = NEURALNET_EVO_CONFIG["RNG"]
     genotype = sample_glorot_flat(weight_shapes, rng)
     ind = Individual()
     ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
@@ -830,7 +855,8 @@ def analyze_trajectory_with_plots(weights: np.ndarray, save_plots: bool = True) 
     console.log("Running trajectory analysis...")
     
     # Run simulation
-    history = run_bot_session(weights, method="headless")
+    tracker = run_bot_session(weights, method="headless")
+    history = convert_tracker_to_history(tracker)
     
     # Calculate metrics
     fit = fitness(history)
@@ -863,9 +889,9 @@ def evolve_using_cma_es(
     pool=None,
     fitness_function=None,
     gecko_body=None,
-) -> tuple[Any, float]:
+) -> dict[str, float]:
     """
-    Main evolutionary loop using CMA-ES. Returns (best_individual, best_fitness).
+    Main evolutionary loop using CMA-ES. Returns (best_individual.genotype, best_fitness, best_tracker).
     Allows overriding config, fitness function, and robot body.
     """
     set_config(config_overrides)
@@ -878,22 +904,22 @@ def evolve_using_cma_es(
     model, data, world, tracker = initialize_world_and_robot()
     input_size = model.nq
     output_size = model.nu
-    hidden_size = CONFIG["HIDDEN_SIZE"]
-    num_hidden_layers = CONFIG["NUM_HIDDEN_LAYERS"]
+    hidden_size = NEURALNET_EVO_CONFIG["HIDDEN_SIZE"]
+    num_hidden_layers = NEURALNET_EVO_CONFIG["NUM_HIDDEN_LAYERS"]
     layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
     weight_shapes = [(layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)]
     total_params = sum(a * b for a, b in weight_shapes)
     
-    console.log(f"Fitness Mode: {CONFIG['FITNESS_MODE']}, Population Size: {CONFIG['POP_SIZE']}, Total Params: {total_params}")
+    console.log(f"Fitness Mode: {NEURALNET_EVO_CONFIG['FITNESS_MODE']}, Population Size: {NEURALNET_EVO_CONFIG['POP_SIZE']}, Total Params: {total_params}")
     
     # Initialize CMA-ES
-    initial_solution = sample_glorot_flat(weight_shapes, CONFIG["RNG"])
+    initial_solution = sample_glorot_flat(weight_shapes, NEURALNET_EVO_CONFIG["RNG"])
     sigma = 0.1  # Initial step size
     options = {
-        'popsize': CONFIG["POP_SIZE"],
-        'maxiter': CONFIG["MAX_GENERATIONS"],
+        'popsize': NEURALNET_EVO_CONFIG["POP_SIZE"],
+        'maxiter': NEURALNET_EVO_CONFIG["MAX_GENERATIONS"],
         'verb_log': 0,  # Reduce logging
-        'verb_disp': 1 if CONFIG["DETAILED_LOGGING"] else 0,
+        'verb_disp': 1 if NEURALNET_EVO_CONFIG["DETAILED_LOGGING"] else 0,
     }
     es = cma.CMAEvolutionStrategy(initial_solution, sigma, options)
     
@@ -903,9 +929,11 @@ def evolve_using_cma_es(
     best_solution = None
     
     try:
-        interactive_mode = CONFIG["INTERACTIVE_MODE"]
-        multi_run_options = CONFIG["MULTI_RUN_OPTIONS"]
-        if multi_run_options and multi_run_options.get('progress') is not None:
+        interactive_mode = NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]
+        multi_run_options = NEURALNET_EVO_CONFIG["MULTI_RUN_OPTIONS"]
+        if NEURALNET_EVO_CONFIG["PROGRESS"] is not None:
+            progress = NEURALNET_EVO_CONFIG["PROGRESS"]
+        elif multi_run_options and multi_run_options.get('progress') is not None:
             progress = multi_run_options['progress']
             multi_task = multi_run_options['task']
         else:
@@ -914,21 +942,21 @@ def evolve_using_cma_es(
         
         gen = 0
         try:
-            outer_loop = progress.add_task("CMA-ES Evolution Progress", total=CONFIG["MAX_GENERATIONS"])
-            if interactive_mode or CONFIG["DETAILED_LOGGING"]:
+            outer_loop = progress.add_task("CMA-ES Evolution Progress", total=NEURALNET_EVO_CONFIG["MAX_GENERATIONS"])
+            if interactive_mode or NEURALNET_EVO_CONFIG["DETAILED_LOGGING"]:
                 inner_loop = progress.add_task(f"Generation {gen+1}", total=1)
             
             while not es.stop():
-                if CONFIG["TIME_LIMIT"] > 0 and (time.time() - evolution_start_time) > CONFIG["TIME_LIMIT"]:
+                if NEURALNET_EVO_CONFIG["TIME_LIMIT"] > 0 and (time.time() - evolution_start_time) > NEURALNET_EVO_CONFIG["TIME_LIMIT"]:
                     console.log("Time limit reached, terminating CMA-ES.")
                     break
                 
                 solutions = es.ask()
                 fitnesses = []
-                if CONFIG["PARALLEL"] and pool:
-                    fitnesses = pool.map(cma_evaluate_individual, solutions)
+                if NEURALNET_EVO_CONFIG["PARALLEL"] and pool:
+                    fitnesses = pool.map(partial(cma_evaluate_individual, gecko_body=gecko_body), solutions)
                 else:
-                    fitnesses = [cma_evaluate_individual(x) for x in solutions]
+                    fitnesses = [cma_evaluate_individual(x, gecko_body) for x in solutions]
                 
                 es.tell(solutions, fitnesses)
                 
@@ -940,19 +968,22 @@ def evolve_using_cma_es(
                     best_fitness = current_best_fitness
                     best_solution = es.result.xbest
                 
-                if interactive_mode or CONFIG["DETAILED_LOGGING"]:
+                progress.update(outer_loop, completed=gen if NEURALNET_EVO_CONFIG["MAX_GENERATIONS"] > 0 else (time.time() - evolution_start_time) // 60 if NEURALNET_EVO_CONFIG["TIME_LIMIT"] > 0 else None)
+
+                if interactive_mode or NEURALNET_EVO_CONFIG["DETAILED_LOGGING"]:
                     progress.update(inner_loop, description=f"Generation {gen} - Best Fitness: {best_fitness:.5f}")
-                    progress.update(outer_loop, completed=gen if CONFIG["MAX_GENERATIONS"] > 0 else (time.time() - evolution_start_time) // 60 if CONFIG["TIME_LIMIT"] > 0 else None)
                     if multi_run_options and multi_run_options.get('progress') is not None:
                         progress.update(multi_task, advance=1)
                 
-                if CONFIG["RECORD_BATCH"] and gen % CONFIG["BATCH_SIZE"] == 0:
+                if NEURALNET_EVO_CONFIG["RECORD_BATCH"] and gen % NEURALNET_EVO_CONFIG["BATCH_SIZE"] == 0:
                     console.log(f"Recording best individual at generation {gen} with fitness {best_fitness:.5f}")
                     best_weights = np.array(best_solution, dtype=np.float32)
-                    run_bot_session(best_weights, method="record", options={"filename": f"cma_batch_{gen}", "mode": CONFIG["FITNESS_MODE"], "fitness": best_fitness})
+                    run_bot_session(best_weights, method="record", options={"filename": f"cma_batch_{gen}", "mode": NEURALNET_EVO_CONFIG["FITNESS_MODE"], "fitness": best_fitness})
                     save_genotype(best_weights, best_fitness)
-                    history = run_bot_session(best_weights, method="headless")
-                    show_qpos_history(history, save=True)
+                    tracker = run_bot_session(best_weights, method="headless")
+                    history = convert_tracker_to_history(tracker)
+                    if NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"] or NEURALNET_EVO_CONFIG["SAVE_PLOTS"]:
+                        show_qpos_history(history, save=NEURALNET_EVO_CONFIG["SAVE_PLOTS"])
                 
                 if interactive_mode and gen % 10 == 0:  # Check every 10 generations for interactivity
                     progress.stop()
@@ -972,6 +1003,9 @@ def evolve_using_cma_es(
                         console.log("CMA-ES terminated by user.")
                         break
                     progress.start()
+
+                if gen % NEURALNET_EVO_CONFIG["BATCH_SIZE"] == 0:
+                    console.log(f"CMA-ES Evolution Generation {gen} - Best Fitness so far: {best_fitness:.5f}")
                 
         finally:
             if multi_run_options is not None and multi_run_options.get('progress') is not None:
@@ -982,13 +1016,15 @@ def evolve_using_cma_es(
         pass  # Pool is managed externally
     
     best_weights = np.array(best_solution, dtype=np.float32)
-    if CONFIG["RECORD_LAST"]:
-        run_bot_session(best_weights, method="record", options={"filename": "cma_final_recording", "mode": CONFIG["FITNESS_MODE"], "fitness": best_fitness})
-    
-    history = run_bot_session(best_weights, method="headless")
+    if NEURALNET_EVO_CONFIG["RECORD_LAST"]:
+        run_bot_session(best_weights, method="record", options={"filename": "cma_final_recording", "mode": NEURALNET_EVO_CONFIG["FITNESS_MODE"], "fitness": best_fitness})
+
+    tracker = run_bot_session(best_weights, method="headless")
+    history = convert_tracker_to_history(tracker)
     save_genotype(best_weights, best_fitness)
-    show_qpos_history(history, save=True)
-    
+    if NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"] or NEURALNET_EVO_CONFIG["SAVE_PLOTS"]:
+        show_qpos_history(history, save=NEURALNET_EVO_CONFIG["SAVE_PLOTS"])
+
     console.rule(f"CMA-ES complete in {(time.time() - evolution_start_time)/60:.2f} minutes. Best fitness: {best_fitness:.5f}")
     console.log(f"Best fitness: {best_fitness:.5f}")
     console.log(f"Total distance walked: {calc_origin_distance(history):.2f}")
@@ -1006,7 +1042,7 @@ def evolve_using_cma_es(
     best_ind = Individual()
     best_ind.genotype = best_solution.tolist()
     best_ind.fitness = best_fitness
-    return best_ind, best_fitness
+    return {"genotype": best_ind.genotype, "fitness": best_fitness, "tracker": tracker}
 
 def save_genotype(weights: np.ndarray, fitness: float = 0.0) -> None:
     """
@@ -1015,7 +1051,7 @@ def save_genotype(weights: np.ndarray, fitness: float = 0.0) -> None:
     output_path = Path(__file__).parent / "output" / "genotypes"
     output_path.mkdir(exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = output_path / f"genotype_cma_{CONFIG['FITNESS_MODE']}_fit {fitness:.4f}_{timestamp}"
+    filename = output_path / f"genotype_cma_{NEURALNET_EVO_CONFIG['FITNESS_MODE']}_fit {fitness:.4f}_{timestamp}"
     np.save(filename, weights)
     console.log(f"Saved best genotype to {filename}.npy")
 
@@ -1036,12 +1072,44 @@ def test_loaded_genotype(file_path: str) -> None:
     Loads a genotype from file, evaluates its fitness, and runs it in viewer mode.
     """
     weights = load_genotype(file_path)
-    history = run_bot_session(weights, method="headless")
+    tracker = run_bot_session(weights, method="headless")
+    history = convert_tracker_to_history(tracker)
     fit = fitness(history)
     console.log(f"Tested loaded genotype fitness: {fit:.5f}")
-    if CONFIG["INTERACTIVE_MODE"]:
+    if NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]:
         run_bot_session(weights, method="viewer")
         show_qpos_history(history)
+
+def run_weights_only(weights: np.ndarray, method: str = "viewer", options: dict = None, gecko_body: DiGraph = None) -> None:
+    """
+    Runs a provided set of weights in the specified method (viewer, headless, record).
+    """
+    history = run_bot_session(weights, method=method, options=options, gecko_override=gecko_body)
+    fit = fitness(history)
+    console.log(f"Ran provided weights with fitness: {fit:.5f}")
+    if method == "headless" and NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]:
+        show_qpos_history(history)
+    if method == "viewer":
+        console.log("Viewer session complete.")
+
+def plot_weights_only(weights: np.ndarray, save: bool = True) -> None:
+    """
+    Analyzes and plots the trajectory of the provided weights without running evolution.
+    """
+    results = analyze_trajectory_with_plots(weights, save_plots=save)
+    console.log("Trajectory analysis results:")
+    for key, value in results.items():
+        console.log(f"  {key}: {value}")
+
+def fitness_of_weights(weights: np.ndarray) -> float:
+    """
+    Evaluates and returns the fitness of the provided weights.
+    """
+    tracker = run_bot_session(weights, method="headless")
+    history = convert_tracker_to_history(tracker)
+    fit = fitness(history)
+    console.log(f"Evaluated fitness of provided weights: {fit:.5f}")
+    return fit
 
 def main():
     evolve_using_cma_es()
