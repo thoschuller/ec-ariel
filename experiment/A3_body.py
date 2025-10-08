@@ -56,21 +56,6 @@ POP_SIZE = 20
 TIME_LIMIT = 60*60*3.5 # in seconds
 MAX_GENERATIONS = None
 
-
-# --- Pool management --- #
-GlobalPool = None
-def get_pool():
-    global GlobalPool
-    if GlobalPool is None:
-        GlobalPool = multiprocessing.Pool(processes=multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1)
-    return GlobalPool
-def close_pool():
-    global GlobalPool
-    if GlobalPool is not None:
-        GlobalPool.close()
-        GlobalPool.join()
-        GlobalPool = None
-
 # Fancy console messages and progress bars
 install()
 # console = Console(file=dual_writer, emoji=False, markup=False)
@@ -507,8 +492,6 @@ def body_evolution() -> tuple[float, RobotGenotype, np.ndarray, DiGraph]: #type:
     start_time = time.time()
 
     try:
-
-        # get_pool()
 
         # Create initial population
         console.rule("Creating initial population")
