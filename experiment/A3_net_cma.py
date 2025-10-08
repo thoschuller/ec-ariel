@@ -1002,9 +1002,9 @@ def evolve_using_cma_es(
                 progress.stop()
     finally:
         if pool is not None:
-            pool.close()
-            pool.join()
-            pool = None
+        pool.close()
+        pool.join()
+        pool = None
     
     best_weights = np.array(best_solution, dtype=np.float32)
     if NEURALNET_EVO_CONFIG["RECORD_LAST"]:
