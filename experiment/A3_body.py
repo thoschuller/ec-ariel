@@ -61,7 +61,7 @@ MAX_GENERATIONS = None
 install()
 (CWD / "output" / "logs").mkdir(parents=True, exist_ok=True)
 # console = Console(file=dual_writer, emoji=False, markup=False)
-console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.log"), "a"), emoji=False, markup=False)
+console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.txt"), "a"), emoji=False, markup=False)
 # console = Console()
 console.rule(f"Body evolution started.")
 PROGRESS = Progress(console=console)
