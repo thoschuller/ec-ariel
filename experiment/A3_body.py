@@ -52,7 +52,7 @@ NUM_OF_MODULES = 30
 # TARGET_POSITION = [5, 0, 0.5]
 NDE = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
 HPD = HighProbabilityDecoder(NUM_OF_MODULES)
-POP_SIZE = 1
+POP_SIZE = 10
 TIME_LIMIT = 60*60*3.5 # in seconds
 MAX_GENERATIONS = None
 
