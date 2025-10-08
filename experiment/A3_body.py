@@ -344,11 +344,14 @@ def initialize_individual(individual: Individual, config_overrides: dict[str, An
 
 def initialize_population(population: Population, config_overrides: dict[str, Any] = config_overrides) -> Population:
     """initialize a population of individuals"""
-    for individual in population:
-        console.log(f"Initializing individual number {population.index(individual)+1}/{len(population)}")
+    new_population = []
+    for idx, individual in enumerate(population):
+        console.log(f"Initializing individual number {idx+1}/{len(population)}")
         if individual.requires_init:
-            individual = initialize_individual(individual, config_overrides)
-    return population
+            new_population.append(initialize_individual(individual, config_overrides))
+        else:
+            new_population.append(individual)
+    return new_population
 
 def train_and_evaluate_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
@@ -373,10 +376,13 @@ def train_and_evaluate_individual(individual: Individual, config_overrides: dict
 
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
+    new_population = []
     for individual in population:
         if individual.requires_eval:
-            individual = train_and_evaluate_individual(individual)
-    return population
+            new_population.append(train_and_evaluate_individual(individual))
+        else:
+            new_population.append(individual)
+    return new_population
 
 def parent_selection(population: Population) -> Population:
     #TODO: implement a better selection mechanism
@@ -504,9 +510,26 @@ def mutate_individual(individual: Individual, mutation_probability: float = 0.5,
 
 def mutate(population: Population, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Population:
     """Mutate individuals tagged for mutation"""
+    new_population = []
     for individual in population:
         if individual.tags.get('mut', True):
-            individual = mutate_individual(individual, mutation_probability, mutation_stddev)
+            mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
+            new_population.append(mutated)
+        else:
+            new_population.append(individual)
+    return new_population
+
+def show_best_individual(individual: Individual) -> None:
+    """Show the best individual in the viewer"""
+    console.rule("Showing best individual")
+    p_matrices = NDE.forward(np.array(individual.genotype[0]))
+    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    a3cma.run_weights_only(method="viewer", weights=np.array(individual.genotype[1]), gecko_body=hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2]))
+
+def show_best_of_population(population: Population) -> Population:
+    """Show the best individual of a population"""
+    best_individual = max(population, key=lambda ind: ind.fitness)
+    show_best_individual(best_individual)
     return population
 
 def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #type: ignore
@@ -524,7 +547,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
         population = evaluate_population(initialize_population(create_population(POP_SIZE)))
         console.log(f"Initial population created with {len(population)} individuals.")
         ops = [
-            EAStep("evalutation", evaluate_population),
+            EAStep("evaluation", evaluate_population),
+            # EAStep("show_best", show_best_of_population),
             EAStep("parent_selection", parent_selection),
             EAStep("crossover", crossover),
             EAStep("mutation", mutate),
