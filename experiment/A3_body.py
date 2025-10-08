@@ -74,7 +74,6 @@ def close_pool():
 # Fancy console messages and progress bars
 install()
 # console = Console(file=dual_writer, emoji=False, markup=False)
-(CWD / "output" / "logs").mkdir(parents=True, exist_ok=True)
 console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.log"), "a"), emoji=False, markup=False)
 # console = Console()
 console.rule(f"Body evolution started.")
@@ -318,14 +317,14 @@ def create_population(size: int) -> Population:
 
 def initialize_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
-    max_attempts = 20  # Limit attempts to avoid infinite loop
+    max_attempts = 10  # Limit attempts to avoid infinite loop
     attempt = 0
     while attempt < max_attempts:
         try:
             individual.genotype.body_genotype = [
-                RNG.normal(0.5, 0.2, 64).astype(np.float32),
-                RNG.normal(0.5, 0.2, 64).astype(np.float32),
-                RNG.normal(0.5, 0.2, 64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
             ]
             training_result = a3cma.evolve_using_cma_es(
                 gecko_body=HPD.probability_matrices_to_graph(
@@ -338,12 +337,12 @@ def initialize_individual(individual: Individual, config_overrides: dict[str, An
             individual.requires_init = False
             individual.requires_eval = False
             return individual
-        except (AttributeError, ValueError) as e:
-            if "'NoneType' object has no attribute 'sites'" in str(e) or "incompatible id in body array" in str(e):
+        except AttributeError as e:
+            if "'NoneType' object has no attribute 'sites'" in str(e):
                 console.log(f"Invalid body genotype generated, retrying... (attempt {attempt + 1})")
                 attempt += 1
             else:
-                raise  # Re-raise if it's a different error
+                raise  # Re-raise if it's a different AttributeError
     raise RuntimeError(f"Failed to initialize individual after {max_attempts} attempts due to invalid body genotypes.")
 
 def initialize_population(population: Population, config_overrides: dict[str, Any] = config_overrides) -> Population:
