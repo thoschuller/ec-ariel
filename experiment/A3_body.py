@@ -436,7 +436,7 @@ class Crossover:
     ) -> tuple[list[list[float]], list[list[float]]]:
         child1, child2 = [], []
         for i in range(len(parent_i)):
-            mask = np.random.integers(0, 2, size=len(parent_i[i])).astype(bool)
+            mask = np.random.randint(0, 2, size=len(parent_i[i])).astype(bool)
             child1[i] = parent_i[i].copy()
             child2[i] = parent_j[i].copy()
             child1[i][mask] = parent_j[i][mask]
