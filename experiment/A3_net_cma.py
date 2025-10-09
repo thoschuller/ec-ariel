@@ -64,7 +64,7 @@ NEURALNET_EVO_CONFIG = {
     "SEGMENT_LENGTH": 250,
     "POP_SIZE": 30,
     "MAX_GENERATIONS": 125,
-    "TIME_LIMIT": 60*8, 
+    "TIME_LIMIT": 60*10, 
     "HIDDEN_SIZE": 8,
     "DURATION": 15,
     "OUTPUT_DELTA": 0.05,
@@ -137,8 +137,8 @@ dual_writer = DualWriter(sys.stdout, log_file)
 # Fancy console messages and progress bars
 if NEURALNET_EVO_CONFIG["CONSOLE"] is None:
     install()
-    # console = Console(file=dual_writer, emoji=False, markup=False)
-    console = Console()
+    console = Console(file=dual_writer, emoji=False, markup=False)
+    #console = Console()
     NEURALNET_EVO_CONFIG["CONSOLE"] = console
 else:
     console = cast(Console, NEURALNET_EVO_CONFIG["CONSOLE"])
@@ -672,7 +672,7 @@ def fitness_sectioned(weights: np.ndarray, gecko_body=None) -> float:
         # Section 1: Flat
         {"spawn": [-1.2, 0, 0.1], "goal": [0.5, 0, 0.1], "runs": 1},
         # Section 2: Rugged (random generation, needs averaging)
-        {"spawn": [0.5, 0, 0.1], "goal": [2.5, 0, 0.1], "runs": 3},
+        {"spawn": [0.5, 0, 0.1], "goal": [2.5, 0, 0.1], "runs": 1},
         # Section 3: Inclined
         {"spawn": [2.5, 0, 0.1], "goal": [4.5, 0, 0.1], "runs": 1},
     ]

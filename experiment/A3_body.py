@@ -52,8 +52,8 @@ NUM_OF_MODULES = 30
 # TARGET_POSITION = [5, 0, 0.5]
 NDE = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
 HPD = HighProbabilityDecoder(NUM_OF_MODULES)
-POP_SIZE = 10
-TIME_LIMIT = 60*60*6 # in seconds
+POP_SIZE = 8
+TIME_LIMIT = 60*60*5 # in seconds
 MAX_GENERATIONS = None
 
 
@@ -296,7 +296,7 @@ def tolist_recursive(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] |
         return obj
 
 config_overrides = {
-    "MAX_GENERATIONS": 75,
+    "MAX_GENERATIONS": 50,
     "MULTI_EVAL_RUNS": 1,
     "CONSOLE": console,
     "PROGRESS": PROGRESS,
@@ -353,6 +353,7 @@ def initialize_population(population: Population, config_overrides: dict[str, An
             new_population.append(initialize_individual(individual, config_overrides))
         else:
             new_population.append(individual)
+        console.log(f"individual initialized with fitness {individual.fitness:.4f}")
     return new_population
 
 def train_and_evaluate_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
@@ -598,14 +599,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
             best_fitness = best_ind.fitness
             # Compute average fitness (only for alive individuals)
             alive_inds = [ind for ind in ea.population if getattr(ind, 'alive', True)]
-            if alive_inds:
-                avg_fitness = sum(ind.fitness for ind in alive_inds) / len(alive_inds)
-            else:
-                avg_fitness = best_fitness
             # Log to CSV
-            with open(fitness_log_path, mode="a", newline="") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow([ea.current_generation, best_fitness, avg_fitness])
+            for ind in alive_inds:
+                with open(fi  tness_log_path, mode="a", newline="") as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow([ea.current_generation, ind.fitness])
 
             console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Average Fitness = {avg_fitness:.4f}, Population Size = {len(ea.population)}")
             runtime = time.time() - start_time
@@ -661,7 +659,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 current_duration = config_overrides.get("DURATION", 0)
                 if best_fitness >= 0.6 and isinstance(current_duration, int) and current_duration < 60:
                     console.rule(f"Reached full arena fitness threshold with fitness {best_fitness:.4f}. Increasing duration.")
-                    config_overrides["MULTI_EVAL_RUNS"] = 3
+                    config_overrides["MULTI_EVAL_RUNS"] = 1
                     config_overrides["DURATION"] = 100
                     a3cma.set_config(config_overrides)
 
