@@ -590,7 +590,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
         if not fitness_log_path.exists():
             with open(fitness_log_path, mode="w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(["generation", "best_fitness", "average_fitness"])
+                writer.writerow(["generation", "fitness"])
 
         while not terminate():
             console.log(f"Running evolution step for generation {ea.current_generation}...")
@@ -605,7 +605,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                     writer = csv.writer(csvfile)
                     writer.writerow([ea.current_generation, ind.fitness])
 
-            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Average Fitness = {avg_fitness:.4f}, Population Size = {len(ea.population)}")
+            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {len(ea.population)}")
             runtime = time.time() - start_time
             PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, Avg Fitness: {avg_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
             console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")

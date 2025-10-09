@@ -62,7 +62,7 @@ NEURALNET_EVO_CONFIG = {
     "SIM_WORLD": OlympicArena,
     "SEED": 42,
     "SEGMENT_LENGTH": 250,
-    "POP_SIZE": 30,
+    "POP_SIZE": 20,
     "MAX_GENERATIONS": 125,
     "TIME_LIMIT": 60*10, 
     "HIDDEN_SIZE": 8,
