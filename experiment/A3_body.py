@@ -601,7 +601,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
             alive_inds = [ind for ind in ea.population if getattr(ind, 'alive', True)]
             # Log to CSV
             for ind in alive_inds:
-                with open(fi  tness_log_path, mode="a", newline="") as csvfile:
+                with open(fitness_log_path, mode="a", newline="") as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerow([ea.current_generation, ind.fitness])
 
