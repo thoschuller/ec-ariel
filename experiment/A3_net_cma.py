@@ -86,7 +86,9 @@ NEURALNET_EVO_CONFIG = {
     "FITNESS_FUNCTION": None,
     "GECKO_BODY": None,
     "CONSOLE": None,
-    "SAVE_PLOTS": False
+    "SAVE_PLOTS": False,
+    "SECTIONED_MODE": False,
+    "SPAWN_POSITION": None,
 }
 
 def set_config(overrides: dict):
@@ -209,12 +211,16 @@ def initialize_world_and_robot(gecko_body=None):
         import copy
         gecko_core = construct_mjspec_from_graph(copy.deepcopy(gecko_core))
     
-    if NEURALNET_EVO_CONFIG["SIM_WORLD"] == SimpleFlatWorld:
+    # Determine spawn position
+    if NEURALNET_EVO_CONFIG["SPAWN_POSITION"] is not None:
+        spawn_pos = NEURALNET_EVO_CONFIG["SPAWN_POSITION"]
+    elif NEURALNET_EVO_CONFIG["SIM_WORLD"] == SimpleFlatWorld:
         spawn_pos = [0, 0, 0]
     elif NEURALNET_EVO_CONFIG["SIM_WORLD"] == OlympicArena:
         spawn_pos = [-0.8, 0, 0.1]
     else:
         spawn_pos = [0, 0, 1]
+    
     world.spawn(gecko_core.spec, spawn_position=spawn_pos, spawn_orientation=[90, 0, 0])
     model = world.spec.compile()
     data = mujoco.MjData(model)
@@ -651,6 +657,87 @@ def fitness(history: list) -> float:
             raise ValueError(f"Unknown FITNESS_MODE: {NEURALNET_EVO_CONFIG['FITNESS_MODE']}")
     return fit
 
+
+def fitness_sectioned(weights: np.ndarray, gecko_body=None) -> float:
+    """
+    Evaluate fitness across three sections of the Olympic Arena independently.
+    Returns the sum of normalized fitness across all sections (scaled to be < 1.0).
+    
+    Sections:
+    1. Flat: spawn=[-1.2, 0, 0.1], goal=[0.5, 0, 0.1]
+    2. Rugged: spawn=[0.5, 0, 0.1], goal=[2.5, 0, 0.1] (averaged over 3 runs)
+    3. Inclined: spawn=[2.5, 0, 0.1], goal=[4.5, 0, 0.1]
+    """
+    sections = [
+        # Section 1: Flat
+        {"spawn": [-1.2, 0, 0.1], "goal": [0.5, 0, 0.1], "runs": 1},
+        # Section 2: Rugged (random generation, needs averaging)
+        {"spawn": [0.5, 0, 0.1], "goal": [2.5, 0, 0.1], "runs": 3},
+        # Section 3: Inclined
+        {"spawn": [2.5, 0, 0.1], "goal": [4.5, 0, 0.1], "runs": 1},
+    ]
+    
+    section_fitnesses = []
+    
+    for idx, section in enumerate(sections):
+        spawn_pos = section["spawn"]
+        goal_pos = section["goal"]
+        num_runs = section["runs"]
+        
+        run_fitnesses = []
+        for _ in range(num_runs):
+            # Temporarily override spawn position
+            original_spawn = NEURALNET_EVO_CONFIG["SPAWN_POSITION"]
+            NEURALNET_EVO_CONFIG["SPAWN_POSITION"] = spawn_pos
+            
+            try:
+                # Run simulation
+                tracker = run_bot_session(weights, method="headless", gecko_body=gecko_body)
+                history = convert_tracker_to_history(tracker)
+                
+                # Calculate fitness for this section towards its goal
+                if not history or len(history) < 2:
+                    run_fitnesses.append(0.0)
+                    continue
+                
+                # Calculate progress toward section goal
+                forward_towards_goal = calc_forward_towards_target(history, goal_pos)
+                start_xy = np.array(history[0][:2])
+                goal_xy = np.array(goal_pos[:2])
+                section_distance = float(np.linalg.norm(goal_xy - start_xy))
+                
+                # Fraction of section completed (clamped to [0, 1])
+                fraction_completed = (
+                    forward_towards_goal / section_distance if section_distance > 0.0 else 0.0
+                )
+                fraction_completed = max(0.0, min(fraction_completed, 1.0))
+                
+                # Lateral penalty
+                lateral_rel = calc_lateral_relative_to_target(history, goal_pos)
+                normalized_lateral = (
+                    abs(lateral_rel) / section_distance if section_distance > 0.0 else 0.0
+                )
+                
+                section_fit = max(0.0, fraction_completed - normalized_lateral * NEURALNET_EVO_CONFIG["LATERAL_PENALTY_FACTOR"])
+                run_fitnesses.append(section_fit)
+                
+            finally:
+                # Restore original spawn position
+                NEURALNET_EVO_CONFIG["SPAWN_POSITION"] = original_spawn
+        
+        # Average over runs for this section
+        avg_section_fitness = float(np.mean(run_fitnesses)) if run_fitnesses else 0.0
+        section_fitnesses.append(avg_section_fitness)
+    
+    # Sum of all sections (each is in [0, 1], so total is in [0, 3])
+    # Divide by 3 to get average in [0, 1], then map to [-1, 0] range
+    # This ensures complete separation: sectioned in [-1, 0], full arena in [0, 2+]
+    # Formula: -1 + avg maps [0, 1] to [-1, 0]
+    avg_section_fitness = sum(section_fitnesses) / 3.0
+    total_fitness = -1.0 + avg_section_fitness
+    
+    return total_fitness
+
 def evaluate_ind(ind: Individual) -> float:
     weights = np.array(ind.genotype, dtype=np.float32)
     runs = NEURALNET_EVO_CONFIG["MULTI_EVAL_RUNS"]
@@ -671,6 +758,12 @@ def evaluate_individual_isolated(genotype_list: list, gecko_body=None) -> float:
     mujoco.set_mjcb_control(None)
     weights = np.array(genotype_list, dtype=np.float32)
     try:
+        # Use sectioned fitness if enabled
+        if NEURALNET_EVO_CONFIG["SECTIONED_MODE"]:
+            fit = fitness_sectioned(weights, gecko_body=gecko_body)
+            return fit
+        
+        # Otherwise use normal fitness evaluation
         runs = NEURALNET_EVO_CONFIG["MULTI_EVAL_RUNS"]
         if runs > 1:
             fits = []

@@ -53,7 +53,7 @@ NUM_OF_MODULES = 30
 NDE = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
 HPD = HighProbabilityDecoder(NUM_OF_MODULES)
 POP_SIZE = 10
-TIME_LIMIT = 60*60*3.5 # in seconds
+TIME_LIMIT = 60*60*6 # in seconds
 MAX_GENERATIONS = None
 
 
@@ -296,10 +296,12 @@ def tolist_recursive(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] |
         return obj
 
 config_overrides = {
-    "MAX_GENERATIONS": 125,
+    "MAX_GENERATIONS": 75,
     "MULTI_EVAL_RUNS": 1,
     "CONSOLE": console,
     "PROGRESS": PROGRESS,
+    "SECTIONED_MODE": True,  # Start with sectioned training
+    "DURATION": 20,
 }
 
 
@@ -575,36 +577,93 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
         task = PROGRESS.add_task("[green]Evolving bodies...", total=MAX_GENERATIONS if MAX_GENERATIONS else TIME_LIMIT if TIME_LIMIT else None)
         PROGRESS.start()
 
+        # Ensure output/genotypes and output/weights directories exist
+        (CWD / "output" / "genotypes").mkdir(parents=True, exist_ok=True)
+        (CWD / "output" / "weights").mkdir(parents=True, exist_ok=True)
+        (CWD / "output" / "plots").mkdir(parents=True, exist_ok=True)
+
+        # Prepare CSV for logging fitness
+        import csv
+        fitness_log_path = CWD / "output" / "logs" / "fitness_log.csv"
+        # Write header if file does not exist
+        if not fitness_log_path.exists():
+            with open(fitness_log_path, mode="w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["generation", "best_fitness", "average_fitness"])
+
         while not terminate():
             console.log(f"Running evolution step for generation {ea.current_generation}...")
             ea.step()
-            best_fitness = ea.get_solution('best', only_alive=False).fitness
-            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {len(ea.population)}")
-            runtime = time.time() - start_time
-            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
-            console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
-            p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
-            hpd = HighProbabilityDecoder(NUM_OF_MODULES)
-            a3cma.run_weights_only(method="record", weights=np.array(ea.get_solution('best', only_alive=False).genotype[1]), gecko_body=hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2]))
-            if(best_fitness >= 60 and config_overrides["DURATION"] is not None and config_overrides["DURATION"] < 100): # type: ignore
-                console.rule(f"Reached fitness threshold 2 with fitness {best_fitness:.4f}. Starting next stage.")
-                config_overrides["MULTI_EVAL_RUNS"] = 3
-                config_overrides["DURATION"] = 100
-            elif(best_fitness >= 20 and config_overrides["DURATION"] is not None and config_overrides["DURATION"] < 60): # type: ignore
-                console.rule(f"Reached fitness threshold 1 with fitness {best_fitness:.4f}. Starting next stage.")
-                config_overrides["MULTI_EVAL_RUNS"] = 3
-                config_overrides["DURATION"] = 60
+            best_ind = ea.get_solution('best', only_alive=False)
+            best_fitness = best_ind.fitness
+            # Compute average fitness (only for alive individuals)
+            alive_inds = [ind for ind in ea.population if getattr(ind, 'alive', True)]
+            if alive_inds:
+                avg_fitness = sum(ind.fitness for ind in alive_inds) / len(alive_inds)
+            else:
+                avg_fitness = best_fitness
+            # Log to CSV
+            with open(fitness_log_path, mode="a", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([ea.current_generation, best_fitness, avg_fitness])
 
-            p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
+            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Average Fitness = {avg_fitness:.4f}, Population Size = {len(ea.population)}")
+            runtime = time.time() - start_time
+            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, Avg Fitness: {avg_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
+            console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
+            p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
             hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+            gecko_body = hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2])
+            # Save JSON of best body
             save_graph_as_json(
-                hpd.probability_matrices_to_graph(
-                    p_matrices[0],
-                    p_matrices[1],
-                    p_matrices[2],
-                ),
+                gecko_body,
                 CWD / "output" / "genotypes" / f"best_body_genotype_gen{ea.current_generation}_fit{best_fitness:.4f}.json",
             )
+            # Save weights of best brain
+            weights_path = CWD / "output" / "weights" / f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy"
+            np.save(weights_path, np.array(best_ind.genotype[1]))
+            # Save plot of best individual's trajectory if available
+            try:
+                # Try to get tracker from a3cma if available
+                if hasattr(best_ind, 'tracker') and getattr(best_ind, 'tracker', None) is not None:
+                    tracker = best_ind.tracker
+                elif hasattr(best_ind, 'history') and getattr(best_ind, 'history', None) is not None:
+                    tracker = best_ind
+                else:
+                    tracker = None
+                # If tracker has history, plot it
+                if tracker is not None and hasattr(tracker, 'history') and 'xpos' in tracker.history:
+                    xpos_history = tracker.history['xpos'][0]
+                    plt.figure()
+                    show_xpos_history(xpos_history)
+                    plt.savefig(CWD / "output" / "plots" / f"best_path_gen{ea.current_generation}_fit{best_fitness:.4f}.png")
+                    plt.close()
+            except Exception as e:
+                console.log(f"[yellow]Warning: Could not save plot for generation {ea.current_generation}: {e}")
+
+            # Record video as before
+            a3cma.run_weights_only(method="record", weights=np.array(best_ind.genotype[1]), gecko_body=gecko_body)
+
+            # Stage transitions based on fitness thresholds
+            if config_overrides.get("SECTIONED_MODE", False):
+                # Stage 1: Sectioned training (fitness in [-1, 0])
+                # -1 = no progress, 0 = all sections complete
+                # When sectioned fitness >= -0.2, sections are performing very well
+                if best_fitness >= -0.2:
+                    console.rule(f"Reached sectioned fitness threshold with fitness {best_fitness:.4f}. Switching to full arena mode.")
+                    config_overrides["SECTIONED_MODE"] = False
+                    config_overrides["MULTI_EVAL_RUNS"] = 1
+                    config_overrides["DURATION"] = 50
+                    a3cma.set_config(config_overrides)
+            else:
+                # Stage 2: Full arena training (fitness in [0, 2+])
+                # 0 = no progress, 1 = reached goal, 2 = reached goal quickly
+                current_duration = config_overrides.get("DURATION", 0)
+                if best_fitness >= 0.6 and isinstance(current_duration, int) and current_duration < 60:
+                    console.rule(f"Reached full arena fitness threshold with fitness {best_fitness:.4f}. Increasing duration.")
+                    config_overrides["MULTI_EVAL_RUNS"] = 3
+                    config_overrides["DURATION"] = 100
+                    a3cma.set_config(config_overrides)
 
         PROGRESS.remove_task(task)
         PROGRESS.stop()
