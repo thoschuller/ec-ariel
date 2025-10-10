@@ -12,7 +12,7 @@ Written by;
 """
 
 # Third-party libraries
-import csv
+# import csv
 from typing import Any
 from collections.abc import Callable
 
@@ -60,7 +60,7 @@ NEURALNET_EVO_CONFIG = {
     "SEGMENT_LENGTH": 250,
     "POP_SIZE": 20,
     "MAX_GENERATIONS": 125,
-    "TIME_LIMIT": 60*10, 
+    "TIME_LIMIT": 60*60, 
     "HIDDEN_SIZE": 8,
     "DURATION": 15,
     "OUTPUT_DELTA": 0.05,
@@ -78,10 +78,9 @@ NEURALNET_EVO_CONFIG = {
     "PARALLEL_CORES": multiprocessing.cpu_count()-1 if multiprocessing.cpu_count() > 1 else 1,
     "MULTI_RUN_OPTIONS": {},
     "MULTI_EVAL_RUNS": 1,
-    "RNG": np.random.default_rng(),
     "FITNESS_FUNCTION": None,
     "GECKO_BODY": None,
-    "CONSOLE": None,
+    # "CONSOLE": None,
     "SAVE_PLOTS": False,
     "SECTIONED_MODE": False,
     "SPAWN_POSITION": None,
@@ -97,18 +96,15 @@ def set_fitness_function(func: Callable[[list[Any]], float] | None) -> None:
 def set_gecko_body(body: Any) -> None:
     NEURALNET_EVO_CONFIG["GECKO_BODY"] = body
 
-def get_rng() -> np.random.Generator:
-    return cast(np.random.Generator, NEURALNET_EVO_CONFIG["RNG"])
+# def get_stats_csv_path() -> Path:
+#     path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{NEURALNET_EVO_CONFIG['FITNESS_MODE']}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
+#     path.parent.mkdir(exist_ok=True)
+#     return path
 
-def get_stats_csv_path() -> Path:
-    path = Path(__file__).parent / "output" / "logs" / f"gen_stats_{NEURALNET_EVO_CONFIG['FITNESS_MODE']}_run {time.strftime('%Y%m%d-%H%M%S')}.csv"
-    path.parent.mkdir(exist_ok=True)
-    return path
-
-def get_stats_output_path() -> Path:
-    path = Path(__file__).parent / "output"
-    path.mkdir(exist_ok=True)
-    return path
+# def get_stats_output_path() -> Path:
+#     path = Path(__file__).parent / "output"
+#     path.mkdir(exist_ok=True)
+#     return path
 
 
 
@@ -130,39 +126,33 @@ log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)  # line-buffe
 
 dual_writer = DualWriter(sys.stdout, log_file)
 
-# Fancy console messages and progress bars
-if NEURALNET_EVO_CONFIG["CONSOLE"] is None:
-    install()
-    console = Console(file=dual_writer, emoji=False, markup=False)
-    #console = Console()
-    NEURALNET_EVO_CONFIG["CONSOLE"] = console
-else:
-    console = cast(Console, NEURALNET_EVO_CONFIG["CONSOLE"])
-console.log(f"Experiment started with SEED={NEURALNET_EVO_CONFIG['SEED']}, DEVICE={NEURALNET_EVO_CONFIG['DEVICE']}, PARALLEL={NEURALNET_EVO_CONFIG['PARALLEL']}, PARALLEL_CORES={NEURALNET_EVO_CONFIG['PARALLEL_CORES']}")
+install()
+console = Console(file=dual_writer, emoji=False, markup=False)
+# console.log(f"Experiment started with SEED={NEURALNET_EVO_CONFIG['SEED']}, DEVICE={NEURALNET_EVO_CONFIG['DEVICE']}, PARALLEL={NEURALNET_EVO_CONFIG['PARALLEL']}, PARALLEL_CORES={NEURALNET_EVO_CONFIG['PARALLEL_CORES']}")
 
 plt.ioff()  # Turn off interactive mode for plotting to avoid blocking when running non-interactively
 
-def log_generation_stats(filename: str, pop_mean: float, pop_std: float, pop_max: float) -> None:
-    """
-    Log generation population statistics to a CSV file.
-    """
-    file_exists = Path(filename).exists()
-    with open(filename, "a", newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        if not file_exists:
-            writer.writerow([
-                "mean_fitness", "stdev_fitness", "max_fitness"
-            ])
-        writer.writerow([
-           pop_mean, pop_std, pop_max
-        ])
+# def log_generation_stats(filename: str, pop_mean: float, pop_std: float, pop_max: float) -> None:
+#     """
+#     Log generation population statistics to a CSV file.
+#     """
+#     file_exists = Path(filename).exists()
+#     with open(filename, "a", newline='') as csvfile:
+#         writer = csv.writer(csvfile)
+#         if not file_exists:
+#             writer.writerow([
+#                 "mean_fitness", "stdev_fitness", "max_fitness"
+#             ])
+#         writer.writerow([
+#            pop_mean, pop_std, pop_max
+#         ])
 
 def yaw_from_xmat(xmat_flat: np.ndarray) -> float:
     R = xmat_flat.reshape(3, 3)
     return math.atan2(R[1, 0], R[0, 0])  # Z-up convention
 
 
-def sample_glorot_flat(weight_shapes: list[tuple[int, int]], rng: np.random.Generator) -> np.ndarray:
+def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
     """
     Sample weights using Glorot/Xavier initialization for tanh networks.
     For each weight matrix with shape (fan_in, fan_out):
@@ -171,7 +161,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]], rng: np.random.Gene
     parts = []
     for fan_in, fan_out in weight_shapes:
         limit = np.sqrt(6.0 / (fan_in + fan_out))
-        W = rng.uniform(-limit, limit, size=(fan_in, fan_out)).astype(np.float32)
+        W = np.random.uniform(-limit, limit, size=(fan_in, fan_out)).astype(np.float32)
         parts.append(W.reshape(-1))
     return np.concatenate(parts, dtype=np.float32)
 
@@ -216,7 +206,7 @@ def initialize_world_and_robot(gecko_body: Any = None) -> tuple[Any, mujoco.MjDa
     else:
         spawn_pos = [0, 0, 1]
     
-    world.spawn(gecko_core.spec, spawn_position=spawn_pos, spawn_orientation=[90, 0, 0])
+    world.spawn(gecko_core.spec, position=spawn_pos, rotation=[90, 0, 0])
     model = world.spec.compile()
     data = mujoco.MjData(model)
     
@@ -754,10 +744,11 @@ def evaluate_ind(ind: Individual) -> float:
         fit = fitness(history)
     return fit
 
-def evaluate_individual_isolated(genotype_list: list[float], gecko_body: Any = None) -> float:
+def evaluate_individual_isolated(genotype_list: list[float], gecko_body: Any = None, config: dict[str, Any] | None = None) -> float:
     mujoco.set_mjcb_control(None)
     weights = np.array(genotype_list, dtype=np.float32)
     try:
+        set_config(config)
         # Use sectioned fitness if enabled
         if cast(bool, NEURALNET_EVO_CONFIG["SECTIONED_MODE"]):
             fit = fitness_sectioned(weights, gecko_body=gecko_body)
@@ -784,8 +775,8 @@ def evaluate_individual_isolated(genotype_list: list[float], gecko_body: Any = N
         mujoco.set_mjcb_control(None)
 
 
-def cma_evaluate_individual(genotype_array: np.ndarray, gecko_body: Any = None) -> float:
-    fit = evaluate_individual_isolated(genotype_array.tolist(), gecko_body=gecko_body)
+def cma_evaluate_individual(genotype_array: np.ndarray, gecko_body: Any = None, config: dict[str, Any] = None) -> float:
+    fit = evaluate_individual_isolated(genotype_array.tolist(), gecko_body=gecko_body, config=config)
     if fit == -1000.0:
         return 1000.0  # penalty for minimization
     return -fit  # negate for CMA-ES minimization
@@ -909,8 +900,7 @@ def get_controller_from_weights(weights: np.ndarray) -> Controller:
 
 def create_individual(weight_shapes: list[tuple[int, int]]) -> Individual:
     """Create a random individual with Glorot/Xavier weight initialization."""
-    rng = NEURALNET_EVO_CONFIG["RNG"]
-    genotype = sample_glorot_flat(weight_shapes, rng)
+    genotype = sample_glorot_flat(weight_shapes)
     ind = Individual()
     ind.genotype = genotype.tolist()  # Store as list to avoid numpy ambiguity
     ind.requires_eval = True
@@ -973,9 +963,12 @@ def evolve_using_cma_es(
         if pool is None:
             pool = multiprocessing.Pool(cast(int, NEURALNET_EVO_CONFIG["PARALLEL_CORES"]))
         console.log(f"Using multiprocessing pool with {cast(int, NEURALNET_EVO_CONFIG['PARALLEL_CORES'])} cores")
+        config_for_workers = copy.deepcopy(NEURALNET_EVO_CONFIG)
+        eval_func = partial(cma_evaluate_individual, gecko_body=gecko_body, config=config_for_workers)
     else:
         pool = None
         console.log("Running in single-threaded mode")
+        eval_func = partial(cma_evaluate_individual, gecko_body=gecko_body, config=NEURALNET_EVO_CONFIG)
     console.rule("[green]Starting CMA-ES Run")
     model, _, _, tracker = initialize_world_and_robot()
     input_size = model.nq
@@ -989,7 +982,7 @@ def evolve_using_cma_es(
     console.log(f"Fitness Mode: {NEURALNET_EVO_CONFIG['FITNESS_MODE']}, Population Size: {cast(int, NEURALNET_EVO_CONFIG['POP_SIZE'])}, Total Params: {total_params}")
     
     # Initialize CMA-ES
-    initial_solution = sample_glorot_flat(weight_shapes, NEURALNET_EVO_CONFIG["RNG"])
+    initial_solution = sample_glorot_flat(weight_shapes)
     sigma = 0.1  # Initial step size
     options = {
         'popsize': cast(int, NEURALNET_EVO_CONFIG["POP_SIZE"]),
@@ -1004,12 +997,11 @@ def evolve_using_cma_es(
     best_fitness = -np.inf
     best_solution = None
     
+    time_spent_evaluating = 0.0
     try:
         interactive_mode = NEURALNET_EVO_CONFIG["INTERACTIVE_MODE"]
         multi_run_options = cast(dict[str, Any] | None, NEURALNET_EVO_CONFIG["MULTI_RUN_OPTIONS"])
-        if NEURALNET_EVO_CONFIG["PROGRESS"] is not None:
-            progress = NEURALNET_EVO_CONFIG["PROGRESS"]
-        elif multi_run_options and multi_run_options.get('progress') is not None:
+        if  multi_run_options and multi_run_options.get('progress') is not None:
             progress = multi_run_options['progress']
             _ = multi_run_options['task']
         else:
@@ -1029,10 +1021,13 @@ def evolve_using_cma_es(
                 
                 solutions = es.ask()
                 fitnesses = []
+                pre_eval_time = time.time()
                 if NEURALNET_EVO_CONFIG["PARALLEL"] and pool:
-                    fitnesses = pool.map(partial(cma_evaluate_individual, gecko_body=gecko_body), solutions)
+                    fitnesses = pool.map(eval_func, solutions)
                 else:
-                    fitnesses = [cma_evaluate_individual(x, gecko_body) for x in solutions]
+                    fitnesses = [eval_func(x) for x in solutions]
+                eval_time = time.time() - pre_eval_time
+                time_spent_evaluating += eval_time
                 
                 es.tell(solutions, fitnesses)
                 
@@ -1111,6 +1106,7 @@ def evolve_using_cma_es(
         show_qpos_history(history, save=cast(bool, NEURALNET_EVO_CONFIG["SAVE_PLOTS"]))
 
     console.rule(f"CMA-ES complete in {(time.time() - evolution_start_time)/60:.2f} minutes. Best fitness: {best_fitness:.5f}")
+    console.log(f"Total time spent evaluating: {time_spent_evaluating:.2f} seconds, {time_spent_evaluating/(time.time() - evolution_start_time)*100:.2f}% of total time.")
     console.log(f"Best fitness: {best_fitness:.5f}")
     console.log(f"Total distance walked: {calc_origin_distance(history):.2f}")
     console.log(f"Total forward distance: {calc_forward_distance(history):.2f}")

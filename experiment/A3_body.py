@@ -60,9 +60,8 @@ MAX_GENERATIONS = None
 install()
 (CWD / "output" / "logs").mkdir(parents=True, exist_ok=True)
 # console = Console(file=dual_writer, emoji=False, markup=False)
-console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.txt"), "a"), emoji=False, markup=False)
-# console = Console()
-console.rule(f"Body evolution started.")
+# console = Console(file = open(CWD / "output" / "logs" / (time.strftime("%Y%m%d-%H%M%S") + "-evolution.txt"), "a"), emoji=False, markup=False)
+console = Console()
 PROGRESS = Progress(console=console)
 
 
@@ -77,7 +76,7 @@ PROGRESS = Progress(console=console)
 #     return -cartesian_distance
 
 
-def show_xpos_history(history: list[list[float]]) -> None:
+def show_xpos_history(history: list[tuple[float, float, float]], save_path: str | None = None) -> None:
     # Create a tracking camera
     camera = mj.MjvCamera()
     camera.type = mj.mjtCamera.mjCAMERA_FREE
@@ -91,17 +90,16 @@ def show_xpos_history(history: list[list[float]]) -> None:
     world = OlympicArena()
     model = world.spec.compile()
     data = mj.MjData(model)
-    save_path = str(DATA / "background.png")
+    background_path = str(DATA / "background.png")
     single_frame_renderer(
         model,
         data,
-        camera=camera,
-        save_path=save_path,
+        save_path=background_path,
         save=True,
     )
 
     # Setup background image
-    img = plt.imread(save_path)
+    img = plt.imread(background_path)
     _, ax = plt.subplots()
     ax.imshow(img)
     w, h, _ = img.shape
@@ -140,7 +138,9 @@ def show_xpos_history(history: list[list[float]]) -> None:
     plt.title("Robot Path in XY Plane")
 
     # Show results
-    plt.show()
+    if save_path is None:
+        save_path = str(DATA / "robot_path.png")
+    plt.savefig(save_path)
 
 
 # def nn_controller(
@@ -297,8 +297,8 @@ def tolist_recursive(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] |
 config_overrides = {
     "MAX_GENERATIONS": 75,
     "MULTI_EVAL_RUNS": 1,
-    "CONSOLE": console,
-    "PROGRESS": PROGRESS,
+    # "CONSOLE": console,
+    # "PROGRESS": PROGRESS,
     "SECTIONED_MODE": True,  # Start with sectioned training
     "DURATION": 20,
 }
@@ -589,6 +589,7 @@ def show_best_of_population(population: Population) -> Population:
 def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #type: ignore
     """full evolution of body and brain genotypes
     returns fitness, body_genotype, brain_genotype, body_phenotype"""
+    console.rule(f"Body evolution started.")
 
     start_time = time.time()
 
@@ -687,10 +688,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 # If tracker has history, plot it
                 if tracker is not None and hasattr(tracker, 'history') and 'xpos' in tracker.history:
                     xpos_history = tracker.history['xpos'][0]
-                    plt.figure()
-                    show_xpos_history(xpos_history)
-                    plt.savefig(CWD / "output" / "plots" / f"best_path_gen{ea.current_generation}_fit{best_fitness:.4f}.png")
-                    plt.close()
+                    show_xpos_history(xpos_history, save_path=str(CWD / "output" / "plots" / f"best_path_gen{ea.current_generation}_fit{best_fitness:.4f}.png"))
                 else:
                     no_plot_reason = "no tracker" if tracker is None else "no history" if not hasattr(tracker, 'history') else "no xpos in history"
                     console.log(f"[yellow]Warning: No tracker history available for generation {ea.current_generation}, {no_plot_reason}, skipping path plot.")
@@ -715,7 +713,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 # Stage 2: Full arena training (fitness in [0, 2+])
                 # 0 = no progress, 1 = reached goal, 2 = reached goal quickly
                 current_duration = config_overrides.get("DURATION", 0)
-                if best_fitness >= 0.6 and isinstance(current_duration, int) and current_duration < 60:
+                if best_fitness >= 0.6 and current_duration < 60:
                     console.rule(f"Reached full arena fitness threshold with fitness {best_fitness:.4f}. Increasing duration.")
                     config_overrides["MULTI_EVAL_RUNS"] = 1
                     config_overrides["DURATION"] = 100
