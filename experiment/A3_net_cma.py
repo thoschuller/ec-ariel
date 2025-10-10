@@ -35,7 +35,7 @@ import sys
 from typing import cast
 
 # CMA-ES library
-from cmaes import CMAEvolutionStrategy # pyright: ignore[reportMissingTypeStubs]
+from cma import CMAEvolutionStrategy # pyright: ignore[reportMissingTypeStubs]
 from functools import partial
 
 # Local libraries
