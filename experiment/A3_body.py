@@ -380,6 +380,7 @@ def train_and_evaluate_individual(individual: Individual, config_overrides: dict
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
     console.log("Starting population evaluation...")
+    start_time = time.time()
     new_population = []
     re_evaluated = 0
     eval_inds = [ind for ind in population if ind.requires_eval]
@@ -390,9 +391,7 @@ def evaluate_population(population: Population) -> Population:
         PROGRESS.update(evaluation_task, advance=1)
     for individual in [ind for ind in population if not ind.requires_eval]:
         new_population.append(individual)
-    PROGRESS.stop_task(evaluation_task)
-    evaluation_time = PROGRESS.get_timer(evaluation_task)
-    PROGRESS.remove_task(evaluation_task)
+    evaluation_time = time.time() - start_time
     console.log(f"Re-evaluated {re_evaluated}/{len(population)} individuals in {evaluation_time:.2f} seconds.")
     return new_population
 
@@ -401,6 +400,7 @@ def parent_selection(population: Population) -> Population:
     """Tournament selection"""
     console.log("Starting parent selection...")
     task = PROGRESS.add_task("[green]Selecting parents...", total=len(population)//2)
+    start_time = time.time()
     PROGRESS.start_task(task)
 
     # Shuffle population to avoid bias
@@ -420,7 +420,7 @@ def parent_selection(population: Population) -> Population:
             ind_j.tags['ps'] = True
         PROGRESS.update(task, advance=1)
     PROGRESS.stop_task(task)
-    task_time = PROGRESS.get_timer(task)
+    task_time = time.time() - start_time
     PROGRESS.remove_task(task)
     console.log(f"Parent selection completed in {task_time:.2f} seconds.")
     return population
@@ -428,6 +428,7 @@ def parent_selection(population: Population) -> Population:
 def survivor_selection(population: Population) -> Population:
     console.log("Starting survivor selection...")
     task = PROGRESS.add_task("[green]Selecting survivors...")
+    start_time = time.time()
 
     # Shuffle population to avoid bias
     np.random.shuffle(population)
@@ -455,8 +456,7 @@ def survivor_selection(population: Population) -> Population:
     if len(survivors) > POP_SIZE:
         survivors = survivors[:POP_SIZE]
 
-    PROGRESS.stop_task(task)
-    task_time = PROGRESS.get_timer(task)
+    task_time = time.time() - start_time
     PROGRESS.remove_task(task)
     console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
 
@@ -515,6 +515,7 @@ def crossover(population: Population) -> Population:
     # Shuffle population to avoid bias
 
     console.log("Starting crossover...")
+    start_time = time.time()
     parents = [ind for ind in population if ind.tags.get('ps', False)]
 
     task = PROGRESS.add_task("[green]Crossover...", total=len(parents)//2)
@@ -527,8 +528,7 @@ def crossover(population: Population) -> Population:
             child_i, child_j = crossover_individuals(parent_i, parent_j)
             population.extend([child_i, child_j])
             PROGRESS.update(task, advance=1)
-    PROGRESS.stop_task(task)
-    task_time = PROGRESS.get_timer(task)
+    task_time = time.time() - start_time
     PROGRESS.remove_task(task)
     console.log(f"Crossover completed in {task_time:.2f} seconds.")
 
@@ -554,6 +554,7 @@ def mutate_individual(individual: Individual, mutation_probability: float = 0.5,
 def mutate(population: Population, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Population:
     """Mutate individuals tagged for mutation"""
     console.log("Starting mutation...")
+    start_time = time.time()
     new_population = []
     mutable_inds = [ind for ind in population if ind.tags.get('mut', True)]
     task = PROGRESS.add_task("[green]Mutating individuals...", total=len(mutable_inds))
@@ -567,7 +568,7 @@ def mutate(population: Population, mutation_probability: float = 0.5, mutation_s
 
     
     PROGRESS.stop_task(task)
-    task_time = PROGRESS.get_timer(task)
+    task_time = time.time() - start_time
     PROGRESS.remove_task(task)
     console.log(f"Mutation completed in {task_time:.2f} seconds.")
 
@@ -630,7 +631,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
 
         # Ensure output/genotypes and output/weights directories exist
         (CWD / "output" / "genotypes").mkdir(parents=True, exist_ok=True)
-        (CWD / "output" / "weights").mkdir(parents=True, exist_ok=True)
         (CWD / "output" / "plots").mkdir(parents=True, exist_ok=True)
 
         # Prepare CSV for logging fitness
@@ -674,7 +674,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 CWD / "output" / "genotypes" / f"best_body_genotype_gen{ea.current_generation}_fit{best_fitness:.4f}.json",
             )
             # Save weights of best brain
-            weights_path = CWD / "output" / "weights" / f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy"
+            weights_path = CWD / "output" / "genotypes" / f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy"
             np.save(weights_path, np.array(best_ind.genotype[1]))
             # Save plot of best individual's trajectory if available
             try:

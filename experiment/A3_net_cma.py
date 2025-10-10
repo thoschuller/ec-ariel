@@ -237,6 +237,30 @@ def convert_tracker_to_history(tracker: Tracker) -> list[np.ndarray]:
     
     return history
 
+def _find_track_body_name(model: mujoco.MjModel) -> str:
+    """
+    Find a valid body name to track for video recording.
+    Preference order:
+    1) Any body with 'core' in its name.
+    2) The first non-world body (id 1) if available.
+    This avoids passing an invalid name to tracking_video_renderer.
+    """
+    # Prefer names containing 'core'
+    for i in range(model.nbody):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
+        if name and "core" in name:
+            return name
+    # Fallback: first non-world body if exists
+    console.log(f"Warning: No body with 'core' in name found, using first non-world body if available.")
+    if model.nbody > 1:
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, 1)
+        if name:
+            console.log(f"Using first non-world body: {name}")
+            return name
+    # Last resort: return an empty string (renderer may use default camera)
+    console.log("No valid body found for tracking.")
+    return ""
+
 def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | None = None, gecko_body: Any = None, duration: float | None = None) -> Tracker:
     """
     Run a single simulation session with given weights and method.
@@ -279,11 +303,14 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | 
                 video_file += f"{options.get('filename','recording')} mode {options.get('mode','unknown')}_fit {options.get('fitness',0.0):.4f}"
 
             video_recorder = VideoRecorder(output_folder=video_path, file_name=video_file, width=1200, height=960, fps=30)
+            # Choose a safe body to track for the camera
+            body_name_to_track = _find_track_body_name(model)
             tracking_video_renderer(
                 model,
                 data,
                 duration=10 + run_duration,
                 video_recorder=video_recorder,
+                geom_to_track=body_name_to_track,
             )
             mujoco.set_mjcb_control(None)
             console.log(f"Recorded episode saved to {video_path}/{video_file}")
@@ -1120,10 +1147,7 @@ def evolve_using_cma_es(
         run_bot_session(best_weights, method="viewer")
     
     # Return as Individual for compatibility
-    best_ind = Individual()
-    best_ind.genotype = best_solution.tolist() if best_solution is not None else []
-    best_ind.fitness = best_fitness
-    return {"genotype": best_ind.genotype, "fitness": best_fitness, "tracker": tracker}
+    return {"genotype": best_weights.tolist(), "fitness": best_fitness, "tracker": tracker}
 
 def save_genotype(weights: np.ndarray, fitness: float = 0.0) -> None:
     """
