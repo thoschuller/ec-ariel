@@ -4,6 +4,7 @@
 from pathlib import Path
 import time
 from typing import Any, Literal, cast
+import copy
 
 import matplotlib.pyplot as plt
 import mujoco as mj
@@ -294,7 +295,7 @@ def tolist_recursive(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] |
         return obj
 
 config_overrides = {
-    "MAX_GENERATIONS": 50,
+    "MAX_GENERATIONS": 75,
     "MULTI_EVAL_RUNS": 1,
     "CONSOLE": console,
     "PROGRESS": PROGRESS,
@@ -312,7 +313,13 @@ def create_individual() -> Individual:
 
 def create_population(size: int) -> Population:
     """Create a population of individuals."""
-    return [create_individual() for _ in range(size)]
+    initialization_task = PROGRESS.add_task("[green]Creating individuals...", total=size)
+    population = []
+    for _ in range(size):
+        population.append(create_individual())
+        PROGRESS.update(initialization_task, advance=1)
+    PROGRESS.remove_task(initialization_task)
+    return population
 
 def initialize_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
@@ -323,21 +330,7 @@ def initialize_individual(individual: Individual, config_overrides: dict[str, An
     ]),
     [] # brain genotype will be set after training
     )
-
-    p_matrices = NDE.forward(np.array(individual.genotype[0]))
-
-    import copy
-    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
-    training_result = a3cma.evolve_using_cma_es(
-        gecko_body=copy.deepcopy(hpd.probability_matrices_to_graph(
-            p_matrices[0],
-            p_matrices[1],
-            p_matrices[2],
-        )),
-        config_overrides=config_overrides,
-    )
-    individual.genotype = (individual.genotype[0], training_result["genotype"])
-    individual.fitness = training_result["fitness"]
+    individual = train_individual_brain(individual, config_overrides)
     individual.requires_init = False
     individual.requires_eval = False
     return individual
@@ -354,16 +347,15 @@ def initialize_population(population: Population, config_overrides: dict[str, An
         console.log(f"individual initialized with fitness {individual.fitness:.4f}")
     return new_population
 
-def train_and_evaluate_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
-    """train and evaluate a single individual, set its fitness attribute"""
+def train_individual_brain(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
+    """train the brain of a single individual, keep its body unchanged"""
+    console.log("Starting brain training...")
     if individual.requires_init:
-        individual = initialize_individual(individual)
+        raise ValueError("Individual must be initialized before training its brain.")
     else:
-        import copy
-        hpd = HighProbabilityDecoder(NUM_OF_MODULES)
         p_matrices = NDE.forward(np.array(individual.genotype[0]))
         training_result = a3cma.evolve_using_cma_es(
-            gecko_body=copy.deepcopy(hpd.probability_matrices_to_graph(
+            gecko_body=copy.deepcopy(HPD.probability_matrices_to_graph(
                 p_matrices[0],
                 p_matrices[1],
                 p_matrices[2],
@@ -373,10 +365,21 @@ def train_and_evaluate_individual(individual: Individual, config_overrides: dict
         individual.genotype = (individual.genotype[0], training_result["genotype"])
         individual.fitness = training_result["fitness"]
         individual.requires_eval = False
+    console.log("Brain training completed.")
+    return individual
+
+def train_and_evaluate_individual(individual: Individual, config_overrides: dict[str, Any] = config_overrides) -> Individual:
+    """train and evaluate a single individual, set its fitness attribute"""
+    if individual.requires_init:
+        individual = initialize_individual(individual)
+    else:
+        individual = train_individual_brain(individual, config_overrides)
+        individual.requires_eval = False
     return individual
 
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
+    console.log("Starting population evaluation...")
     new_population = []
     re_evaluated = 0
     eval_inds = [ind for ind in population if ind.requires_eval]
@@ -387,13 +390,18 @@ def evaluate_population(population: Population) -> Population:
         PROGRESS.update(evaluation_task, advance=1)
     for individual in [ind for ind in population if not ind.requires_eval]:
         new_population.append(individual)
+    PROGRESS.stop_task(evaluation_task)
+    evaluation_time = PROGRESS.get_timer(evaluation_task)
     PROGRESS.remove_task(evaluation_task)
-    console.log(f"Re-evaluated {re_evaluated}/{len(population)} individuals.")
+    console.log(f"Re-evaluated {re_evaluated}/{len(population)} individuals in {evaluation_time:.2f} seconds.")
     return new_population
 
 def parent_selection(population: Population) -> Population:
     #TODO: implement a better selection mechanism
     """Tournament selection"""
+    console.log("Starting parent selection...")
+    task = PROGRESS.add_task("[green]Selecting parents...", total=len(population)//2)
+    PROGRESS.start_task(task)
 
     # Shuffle population to avoid bias
     np.random.shuffle(population)
@@ -410,9 +418,16 @@ def parent_selection(population: Population) -> Population:
         else:
             ind_i.tags['ps'] = False
             ind_j.tags['ps'] = True
+        PROGRESS.update(task, advance=1)
+    PROGRESS.stop_task(task)
+    task_time = PROGRESS.get_timer(task)
+    PROGRESS.remove_task(task)
+    console.log(f"Parent selection completed in {task_time:.2f} seconds.")
     return population
 
 def survivor_selection(population: Population) -> Population:
+    console.log("Starting survivor selection...")
+    task = PROGRESS.add_task("[green]Selecting survivors...")
 
     # Shuffle population to avoid bias
     np.random.shuffle(population)
@@ -439,6 +454,12 @@ def survivor_selection(population: Population) -> Population:
     # If too many, trim to POP_SIZE
     if len(survivors) > POP_SIZE:
         survivors = survivors[:POP_SIZE]
+
+    PROGRESS.stop_task(task)
+    task_time = PROGRESS.get_timer(task)
+    PROGRESS.remove_task(task)
+    console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
+
     return survivors
 
 class Crossover:    
@@ -492,13 +513,24 @@ def crossover_individuals(ind1 : Individual, ind2: Individual) -> tuple[Individu
 def crossover(population: Population) -> Population:
     """Crossover individuals tagged for parent selection"""
     # Shuffle population to avoid bias
+
+    console.log("Starting crossover...")
     parents = [ind for ind in population if ind.tags.get('ps', False)]
+
+    task = PROGRESS.add_task("[green]Crossover...", total=len(parents)//2)
+    PROGRESS.start_task(task)
+
     np.random.shuffle(parents)
     for idx in range(0, len(parents) - 1, 2):
             parent_i = parents[idx]
             parent_j = parents[idx+1]
             child_i, child_j = crossover_individuals(parent_i, parent_j)
             population.extend([child_i, child_j])
+            PROGRESS.update(task, advance=1)
+    PROGRESS.stop_task(task)
+    task_time = PROGRESS.get_timer(task)
+    PROGRESS.remove_task(task)
+    console.log(f"Crossover completed in {task_time:.2f} seconds.")
 
     return population
 
@@ -521,20 +553,31 @@ def mutate_individual(individual: Individual, mutation_probability: float = 0.5,
 
 def mutate(population: Population, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Population:
     """Mutate individuals tagged for mutation"""
+    console.log("Starting mutation...")
     new_population = []
-    for individual in population:
-        if individual.tags.get('mut', True):
-            mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
-            new_population.append(mutated)
-        else:
-            new_population.append(individual)
+    mutable_inds = [ind for ind in population if ind.tags.get('mut', True)]
+    task = PROGRESS.add_task("[green]Mutating individuals...", total=len(mutable_inds))
+    PROGRESS.start_task(task)
+    for individual in mutable_inds:
+        mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
+        new_population.append(mutated)
+        PROGRESS.update(task, advance=1)
+    for individual in [ind for ind in population if not ind.tags.get('mut', True)]:
+        new_population.append(individual)
+
+    
+    PROGRESS.stop_task(task)
+    task_time = PROGRESS.get_timer(task)
+    PROGRESS.remove_task(task)
+    console.log(f"Mutation completed in {task_time:.2f} seconds.")
+
     return new_population
 
 def show_best_individual(individual: Individual) -> None:
     """Show the best individual in the viewer"""
     console.rule("Showing best individual")
     p_matrices = NDE.forward(np.array(individual.genotype[0]))
-    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    hpd = HPD
     a3cma.run_weights_only(method="viewer", weights=np.array(individual.genotype[1]), gecko_body=hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2]))
 
 def show_best_of_population(population: Population) -> Population:
@@ -622,7 +665,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
             PROGRESS.update(evolution_task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
             console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
             p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
-            hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+            hpd = HPD
             gecko_body = hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2])
             # Save JSON of best body
             save_graph_as_json(
@@ -648,6 +691,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                     show_xpos_history(xpos_history)
                     plt.savefig(CWD / "output" / "plots" / f"best_path_gen{ea.current_generation}_fit{best_fitness:.4f}.png")
                     plt.close()
+                else:
+                    no_plot_reason = "no tracker" if tracker is None else "no history" if not hasattr(tracker, 'history') else "no xpos in history"
+                    console.log(f"[yellow]Warning: No tracker history available for generation {ea.current_generation}, {no_plot_reason}, skipping path plot.")
             except Exception as e:
                 console.log(f"[yellow]Warning: Could not save plot for generation {ea.current_generation}: {e}")
 
@@ -682,7 +728,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
         console.log("Best Fitness:", ea.get_solution('best', only_alive=False).fitness)
         console.log("Saving best individual...")
         p_matrices = NDE.forward(np.array(ea.get_solution('best', only_alive=False).genotype[0]))
-        hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+        hpd = HPD
         save_graph_as_json(
             hpd.probability_matrices_to_graph(
                 p_matrices[0],
@@ -706,7 +752,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
     final_body_genotype: list[list[float]] = cast("list[list[float]]", final_ind.genotype[0])
     final_brain_genotype: np.ndarray = np.array(final_ind.genotype[1])
     p_matrices = NDE.forward(np.array(final_body_genotype))
-    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    hpd = HPD
     final_graph = hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2])
     return final_fit, final_body_genotype, final_brain_genotype, final_graph
 
