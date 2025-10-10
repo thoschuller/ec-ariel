@@ -585,7 +585,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
 
         # Prepare CSV for logging fitness
         import csv
-        fitness_log_path = CWD / "output" / "logs" / "fitness_log.csv"
+        fitness_log_path = CWD / "output" / "logs" / f"fitness_log-{time.strftime('%Y%m%d-%H%M%S')}.csv"
         # Write header if file does not exist
         if not fitness_log_path.exists():
             with open(fitness_log_path, mode="w", newline="") as csvfile:
