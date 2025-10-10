@@ -378,11 +378,17 @@ def train_and_evaluate_individual(individual: Individual, config_overrides: dict
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
     new_population = []
-    for individual in population:
-        if individual.requires_eval:
-            new_population.append(train_and_evaluate_individual(individual))
-        else:
-            new_population.append(individual)
+    re_evaluated = 0
+    eval_inds = [ind for ind in population if ind.requires_eval]
+    evaluation_task = PROGRESS.add_task("[green]Evaluating individuals...", total=len(eval_inds))
+    for individual in eval_inds:
+        new_population.append(train_and_evaluate_individual(individual))
+        re_evaluated += 1
+        PROGRESS.update(evaluation_task, advance=1)
+    for individual in [ind for ind in population if not ind.requires_eval]:
+        new_population.append(individual)
+    PROGRESS.remove_task(evaluation_task)
+    console.log(f"Re-evaluated {re_evaluated}/{len(population)} individuals.")
     return new_population
 
 def parent_selection(population: Population) -> Population:
@@ -575,7 +581,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 return True
             return False
         
-        task = PROGRESS.add_task("[green]Evolving bodies...", total=MAX_GENERATIONS if MAX_GENERATIONS else TIME_LIMIT if TIME_LIMIT else None)
+        evolution_task = PROGRESS.add_task("[green]Evolving bodies...", total=MAX_GENERATIONS if MAX_GENERATIONS else TIME_LIMIT if TIME_LIMIT else None)
         PROGRESS.start()
 
         # Ensure output/genotypes and output/weights directories exist
@@ -592,22 +598,28 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 writer = csv.writer(csvfile)
                 writer.writerow(["generation", "fitness"])
 
+        ea.fetch_population()
+        for ind in ea.population:
+                with open(fitness_log_path, mode="a", newline="") as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow([ea.current_generation, ind.fitness])
+
         while not terminate():
             console.log(f"Running evolution step for generation {ea.current_generation}...")
             ea.step()
             best_ind = ea.get_solution('best', only_alive=False)
             best_fitness = best_ind.fitness
             # Compute average fitness (only for alive individuals)
-            alive_inds = [ind for ind in ea.population if getattr(ind, 'alive', True)]
+            ea.fetch_population()
             # Log to CSV
-            for ind in alive_inds:
+            for ind in ea.population:
                 with open(fitness_log_path, mode="a", newline="") as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerow([ea.current_generation, ind.fitness])
 
-            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {len(ea.population)}")
+            console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {ea.population_size}")
             runtime = time.time() - start_time
-            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
+            PROGRESS.update(evolution_task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
             console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
             p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
             hpd = HighProbabilityDecoder(NUM_OF_MODULES)
@@ -640,7 +652,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                 console.log(f"[yellow]Warning: Could not save plot for generation {ea.current_generation}: {e}")
 
             # Record video as before
-            a3cma.run_weights_only(method="record", weights=np.array(best_ind.genotype[1]), gecko_body=gecko_body)
+            a3cma.run_weights_only(method="record", weights=np.array(best_ind.genotype[1]), gecko_body=gecko_body, options={"filename": f"best_body_individual_gen{ea.current_generation}", "fitness": best_fitness}, duration=120)
 
             # Stage transitions based on fitness thresholds
             if config_overrides.get("SECTIONED_MODE", False):
@@ -663,7 +675,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
                     config_overrides["DURATION"] = 100
                     a3cma.set_config(config_overrides)
 
-        PROGRESS.remove_task(task)
+        PROGRESS.remove_task(evolution_task)
         PROGRESS.stop()
 
         console.rule("Evolution process finished.")

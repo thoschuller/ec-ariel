@@ -31,6 +31,7 @@ from rich.progress import Progress
 from rich.prompt import Prompt
 import math
 import sys
+import copy
 
 from typing import cast
 
@@ -203,7 +204,6 @@ def initialize_world_and_robot(gecko_body: Any = None) -> tuple[Any, mujoco.MjDa
     
     # If gecko_core is a DiGraph (robot_graph), reconstruct the spec from it
     if isinstance(gecko_core, DiGraph):
-        import copy
         gecko_core = construct_mjspec_from_graph(copy.deepcopy(gecko_core))
     
     # Determine spawn position
@@ -247,7 +247,7 @@ def convert_tracker_to_history(tracker: Tracker) -> list[np.ndarray]:
     
     return history
 
-def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | None = None, gecko_body: Any = None) -> Tracker:
+def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | None = None, gecko_body: Any = None, duration: float | None = None) -> Tracker:
     """
     Run a single simulation session with given weights and method.
     """
@@ -278,6 +278,8 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | 
 
     mujoco.set_mjcb_control(_control_callback)
 
+    run_duration = duration if duration is not None else cast(float, NEURALNET_EVO_CONFIG['DURATION'])
+
     match method:
         case "record":
             video_path = Path(__file__).parent / "output" / "videos"
@@ -290,7 +292,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | 
             tracking_video_renderer(
                 model,
                 data,
-                duration=10 + cast(float, NEURALNET_EVO_CONFIG['DURATION']),
+                duration=10 + run_duration,
                 video_recorder=video_recorder,
             )
             mujoco.set_mjcb_control(None)
@@ -299,8 +301,7 @@ def run_bot_session(weights: np.ndarray, method: str, options: dict[str, Any] | 
             viewer.launch(model, data)
         case "headless": # for evaluation-only sessions
             # Use the project's simple_runner helper instead of calling mj_step directly.
-            duration_seconds = NEURALNET_EVO_CONFIG["DURATION"]
-            simple_runner(model, data, duration=duration_seconds)
+            simple_runner(model, data, duration=run_duration)
         case _:
             raise ValueError(f"Unknown method: {method}")
 
@@ -1165,11 +1166,11 @@ def test_loaded_genotype(file_path: str) -> None:
         run_bot_session(weights, method="viewer")
         show_qpos_history(history)
 
-def run_weights_only(weights: np.ndarray, method: str = "viewer", options: dict[str, Any] | None = None, gecko_body: Any = None) -> None:
+def run_weights_only(weights: np.ndarray, method: str = "viewer", options: dict[str, Any] | None = None, gecko_body: Any = None, duration: float | None = None) -> None:
     """
     Runs a provided set of weights in the specified method (viewer, headless, record).
     """
-    tracker = run_bot_session(weights, method=method, options=options, gecko_body=gecko_body)
+    tracker = run_bot_session(weights, method=method, options=options, gecko_body=gecko_body, duration=duration)
     history = convert_tracker_to_history(tracker)
     fit = fitness(history)
     console.log(f"Ran provided weights with fitness: {fit:.5f}")
