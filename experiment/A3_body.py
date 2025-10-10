@@ -1,16 +1,14 @@
 """Assignment 3 template code."""
 
 # Standard library
-import multiprocessing
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import mujoco as mj
 import numpy as np
-import numpy.typing as npt
-from mujoco import viewer
+# from mujoco import viewer
 
 # Local libraries
 from ariel import console
@@ -24,8 +22,8 @@ from ariel.ec.a004 import EAStep, EA
 from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 from ariel.simulation.environments import OlympicArena
 from ariel.utils.renderers import single_frame_renderer
-from ariel.utils.tracker import Tracker
-from ariel.simulation.controllers.controller import Controller
+# from ariel.utils.tracker import Tracker
+# from ariel.simulation.controllers.controller import Controller
 import A3_net_cma as a3cma
 
 from rich.console import Console
@@ -508,10 +506,12 @@ def mutate_individual(individual: Individual, mutation_probability: float = 0.5,
         mutations = RNG.normal(0, mutation_stddev, gene_array_np.shape)
         new_gene_array = gene_array_np + mutation_mask * mutations
         mutated_body_genotype.append(new_gene_array.astype(np.float32).tolist())  # Convert back to list
-    individual.genotype = (mutated_body_genotype, None)
-    individual.requires_eval = True
-    individual.tags['mut'] = False
-    return individual
+    mutated_individual = Individual()
+    mutated_individual.genotype = (mutated_body_genotype, None)
+    mutated_individual.requires_eval = True
+    mutated_individual.tags = individual.tags.copy()
+    mutated_individual.tags['mut'] = False
+    return mutated_individual
 
 def mutate(population: Population, mutation_probability: float = 0.5, mutation_stddev: float = 0.1) -> Population:
     """Mutate individuals tagged for mutation"""
@@ -607,7 +607,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]: #t
 
             console.log(f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {len(ea.population)}")
             runtime = time.time() - start_time
-            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, Avg Fitness: {avg_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
+            PROGRESS.update(task, completed=ea.current_generation if MAX_GENERATIONS else runtime, description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s")
             console.log(f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording...")
             p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
             hpd = HighProbabilityDecoder(NUM_OF_MODULES)
