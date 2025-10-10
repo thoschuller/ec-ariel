@@ -42,8 +42,8 @@ from functools import partial
 # Local libraries
 from ariel.utils.renderers import tracking_video_renderer, single_frame_renderer
 from ariel.utils.video_recorder import VideoRecorder
-from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
-from ariel.simulation.environments.olympic_arena import OlympicArena
+from ariel.simulation.environments import SimpleFlatWorld
+from ariel.simulation.environments import OlympicArena
 from ariel.utils.runners import simple_runner
 from ariel.utils.tracker import Tracker
 from ariel.ec.a001 import Individual
@@ -822,7 +822,6 @@ def show_qpos_history(history: list[np.ndarray], save: bool = False) -> None:
     single_frame_renderer(
         model,
         data,
-        camera=camera,
         save_path=str(background_path),
         save=True,
     )
