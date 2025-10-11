@@ -37,9 +37,9 @@ current_stage: int | str = 1
 
 def _create_individual() -> Individual:
     """Create a new individual with Glorot initialization."""
-    individual = train_and_evaluate_individual(initialize_individual(Individual()))
+    individual = initialize_individual(Individual())
     individual.requires_init = False
-    individual.requires_eval = False
+    individual.requires_eval = True
     return individual
 
 
@@ -71,11 +71,13 @@ def _create_population(size: int) -> Population:
                 unique = False
                 break
         if unique:
-            population.append(new_ind)
+            population.append(train_and_evaluate_individual(new_ind))
             progress.update(initialization_task, advance=1)
+            
+    trained_population = evaluate_population(population)
         
     progress.remove_task(initialization_task)
-    return population
+    return trained_population
 
 
 def _train_individual_brain(individual: Individual) -> Individual:
@@ -115,9 +117,9 @@ def initialize_individual(individual: Individual) -> Individual:
         ),
         [],  # brain genotype will be set after training
     )
-    individual = _train_individual_brain(individual)
+    individual = individual
     individual.requires_init = False
-    individual.requires_eval = False
+    individual.requires_eval = True
     return individual
 
 def train_and_evaluate_individual(individual: Individual) -> Individual:
