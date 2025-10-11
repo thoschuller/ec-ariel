@@ -21,7 +21,7 @@ from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 # from ariel.simulation.controllers.controller import Controller
 import constants as constants
 from terminal import console, progress
-from networkx import DiGraph
+from networkx import DiGraph, is_isomorphic
 from utils import numpy_tolist
 import brain_train as braintrain
 import utils as utils
@@ -37,9 +37,9 @@ current_stage: int | str = 1
 
 def _create_individual() -> Individual:
     """Create a new individual with Glorot initialization."""
-    individual = Individual()
-    individual.requires_init = True
-    individual.requires_eval = True
+    individual = train_and_evaluate_individual(initialize_individual(Individual()))
+    individual.requires_init = False
+    individual.requires_eval = False
     return individual
 
 
@@ -48,10 +48,32 @@ def _create_population(size: int) -> Population:
     initialization_task = progress.add_task(
         "[green]Creating individuals...", total=size
     )
-    population = []
-    for _ in range(size):
-        population.append(_create_individual())
-        progress.update(initialization_task, advance=1)
+    population = []        
+    while len(population) < constants.BODY_POP_SIZE:
+        new_ind = _create_individual()
+        unique = True
+        gecko_body = HPD.probability_matrices_to_graph(
+                NDE.forward(np.array(new_ind.genotype[0]))[0],
+                NDE.forward(np.array(new_ind.genotype[0]))[1],
+                NDE.forward(np.array(new_ind.genotype[0]))[2],
+            )
+        for k in range(len(population)):  
+            if population[k].genotype[0] == new_ind.genotype[0]:
+                console.log(f"Duplicate body genotype found with an existing individual. No sense in keeping both. Discarding individual and creating new.")
+                unique = False
+                break          
+            p_matrices_k = NDE.forward(np.array(population[k].genotype[0]))
+            gecko_body_k = HPD.probability_matrices_to_graph(
+                p_matrices_k[0], p_matrices_k[1], p_matrices_k[2]
+            )
+            if is_isomorphic(gecko_body, gecko_body_k):
+                console.log(f"Duplicate body phenotype found with an existing individual. No sense in keeping both. Discarding individual and creating new.")
+                unique = False
+                break
+        if unique:
+            population.append(new_ind)
+            progress.update(initialization_task, advance=1)
+        
     progress.remove_task(initialization_task)
     return population
 
@@ -98,37 +120,20 @@ def initialize_individual(individual: Individual) -> Individual:
     individual.requires_eval = False
     return individual
 
-
-def initialize_population(population: Population) -> Population:
-    """initialize a population of individuals"""
-    new_population = []
-    for idx, individual in enumerate(population):
-        console.log(f"Initializing individual number {idx+1}/{len(population)}")
-        if individual.requires_init:
-            new_population.append(initialize_individual(individual))
-        else:
-            new_population.append(individual)
-        console.log(f"individual initialized with fitness {individual.fitness:.4f}")
-    return new_population
-
-
 def train_and_evaluate_individual(individual: Individual) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
-    if individual.requires_init:
-        individual = initialize_individual(individual)
-    else:
-        individual = _train_individual_brain(individual)
-        individual.requires_eval = False
+    individual = _train_individual_brain(individual)
+    individual.requires_eval = False
     return individual
 
 
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
-    console.log("Starting population evaluation...")
     start_time = time.time()
     new_population = []
     re_evaluated = 0
     eval_inds = [ind for ind in population if ind.requires_eval]
+    console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
     )
@@ -347,15 +352,14 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     console.rule(f"Body evolution started.")
     
     global current_stage
-
+    
     start_time = time.time()
 
 
     # Create initial population
     console.rule("Creating initial population")
-    population = evaluate_population(
-        initialize_population(_create_population(constants.BODY_POP_SIZE))
-    )
+    population = _create_population(constants.BODY_POP_SIZE)
+    
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
         EAStep("evaluation", evaluate_population),
@@ -442,6 +446,21 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         console.log(
             f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
         )
+        
+        
+        #DEBUG: save all bodies of current generation to json
+        ea.fetch_population()
+        for i, ind in enumerate(ea.population):
+            p_matrices = NDE.forward(np.array(ind.genotype[0]))
+            gecko_body = HPD.probability_matrices_to_graph(
+                p_matrices[0], p_matrices[1], p_matrices[2]
+            )
+            utils.save_body_to_json(
+                gecko_body,
+                filename=f"gen{ea.current_generation}_ind{i}_fit{ind.fitness:.4f}",
+            )
+        
+        
         p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
         gecko_body = HPD.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
@@ -452,12 +471,12 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             filename=f"best_body_gen{ea.current_generation}_fit{best_fitness:.4f}",
         )
         # Save weights of best brain
-        utils.save_weights_to_npz(
+        utils.save_brain_genotype(
             np.array(best_ind.genotype[1]),
             filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npz",
         )
         # Record full run and plot
-        tracker = runner.run_weights_only(
+        tracker = runner.run_bot_session(
             method="record",
             weights=np.array(best_ind.genotype[1]),
             gecko_body=copy.deepcopy(gecko_body),
@@ -466,6 +485,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 "fitness": best_fitness,
             },
             duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+            spawn_pos=constants.POSITIONS[0][0],
         )
 
         utils.save_xpos_history(tracker.history["xpos"], fitness=best_fitness)
@@ -577,7 +597,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         ),
         filename=f"best_body_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
     )
-    utils.save_weights_to_npz(
+    utils.save_brain_genotype(
         np.array(ea.get_solution("best", only_alive=False).genotype[1]),
         filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
     )
@@ -599,7 +619,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     utils.save_xpos_history(
         tracker.history["xpos"],
         fitness=ea.get_solution("best", only_alive=False).fitness,
-    )
+    ) 
 
     console.log("Evolution process completed.")
 

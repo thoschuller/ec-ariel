@@ -1,4 +1,3 @@
-from typing import Any
 from networkx import DiGraph
 from ariel.utils.tracker import Tracker
 from ariel.simulation.controllers.controller import Controller
@@ -16,7 +15,6 @@ from ariel.simulation.environments import BaseWorld
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from terminal import console
 from mujoco import viewer
-import copy
 import numpy.typing as npt
 from ariel.body_phenotypes.robogen_lite.constructor import (
     construct_mjspec_from_graph,
@@ -27,7 +25,7 @@ type Vector = npt.NDArray[np.float64]
 RNG = np.random.default_rng(constants.SEED)
 
 def initialize_world_and_robot(
-    gecko_body: DiGraph,
+    gecko_body: DiGraph, # pyright: ignore
     spawn_pos: list[float],
     world: type[BaseWorld] = constants.SIM_WORLD,
 ) -> tuple[object, mujoco.MjData, BaseWorld, Tracker]:

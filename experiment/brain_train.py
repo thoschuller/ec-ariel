@@ -73,7 +73,7 @@ def evolve_using_cma_es(
 
     # Initialize CMA-ES
     initial_solution = sample_glorot_flat(weight_shapes)
-    sigma = 0.1  # Initial step size
+    sigma = 0.2  # Initial step size
     options = {
         "popsize": constants.BRAIN_POP_SIZE,
         "maxiter": constants.BRAIN_MAX_GENERATIONS,
@@ -101,10 +101,13 @@ def evolve_using_cma_es(
                 break
 
             solutions = es.ask()
+            
+            start_eval = time.time()
             if constants.PARALLEL and pool:
                 fitnesses = pool.map(eval_func, solutions)
             else:
                 fitnesses = [eval_func(x) for x in solutions]
+            time_spent_evaluating += time.time() - start_eval
 
             es.tell(solutions, fitnesses)
 

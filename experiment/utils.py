@@ -41,7 +41,7 @@ def load_brain_genotype(file_path: str) -> np.ndarray:
     return weights
 
 
-def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None:
+def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None: # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType]
     """
     Saves the body structure to a JSON file for visualization.
     """
