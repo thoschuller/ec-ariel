@@ -1,0 +1,117 @@
+# from typing import Any, cast
+import experiment.constants as constants
+
+# Environment/world class used in some fitness modes
+# from ariel.simulation.environments import OlympicArena
+from ariel.utils.tracker import Tracker
+import numpy as np
+import mujoco
+from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from experiment.terminal import console
+import session_runner as runner
+
+
+def fitness(
+    tracker: Tracker,
+    spawn: list[float],
+    goal: list[float],
+    bonus: bool = False,
+) -> float:
+    """Evaluate fitness base on history, spawn and goal positions. Penalizes lateral deviation."""
+
+    history = tracker.history
+    if not history or len(history) < 2:
+        raise ValueError("Insufficient history data for fitness evaluation.")
+
+    if spawn[1] != goal[1]:
+        raise NotImplementedError("Goals with lateral displacement not supported yet.")
+
+    # Calculate progress toward goal
+    goal_distance = goal[0] - spawn[0]
+    straight_distance = history["xpos"][-1][0] - spawn[0]
+    correct_direction: bool = goal_distance * straight_distance > 0
+    if not correct_direction:
+        return 0
+
+    lateral_deviation = abs(history["xpos"][-1][1] - spawn[1])
+    countable_distance = (
+        abs(straight_distance) - lateral_deviation * constants.LATERAL_PENALTY_FACTOR
+    )
+
+    basic_fitness = max(0.0, countable_distance / abs(goal_distance))
+
+    if basic_fitness < 1 or not bonus:
+        return basic_fitness
+
+    # time can be determined by the position of the first entry in history beyond goal
+    finish_index = int(np.argmax(abs(np.array(history["xpos"])[:, 0]) >= abs(goal[0])))
+
+    finish_point = finish_index / len(history["xpos"])
+
+    return min(1.0, basic_fitness + (1 - finish_point))
+
+
+def evaluate_individual(
+    genotype_list: list[float],
+    gecko_body: CoreModule,
+    duration: float,
+    sectioned: bool = False,
+) -> float:
+    mujoco.set_mjcb_control(None)
+    weights = np.array(genotype_list, dtype=np.float32)
+    try:
+        # Use sectioned fitness if enabled
+        if sectioned:
+            fitnesses = []
+
+            for spawn, goal in constants.POSITIONS:
+                tracker = runner.run_bot_session(
+                    weights,
+                    method="headless",
+                    gecko_body=gecko_body,
+                    spawn_pos=spawn,
+                    duration=duration,
+                )
+                fit = fitness(
+                    tracker,
+                    spawn=spawn,
+                    goal=goal,
+                )
+                fitnesses.append(fit)
+                if fit <= -1:
+                    break  # early stop since lowest fit counts
+
+            return (
+                min(fitnesses) - 1
+            )  # return the minimum fitness across sections to ensure bot can handle all sections
+
+        tracker = runner.run_bot_session(
+            weights,
+            method="headless",
+            gecko_body=gecko_body,
+            duration=duration,
+            spawn_pos=constants.POSITIONS[0][0],
+        )
+        fit = fitness(
+            tracker=tracker,
+            spawn=constants.POSITIONS[0][0],
+            goal=constants.POSITIONS[2][1],
+            bonus=True,
+        )
+
+        return fit
+    except Exception as e:
+        console.log(f"Evaluation failed for individual: {e}")
+        return -1000.0
+    finally:
+        mujoco.set_mjcb_control(None)
+
+
+def minimized_fitness_evaluation(
+    genotype_list: list[float],
+    gecko_body: CoreModule,
+    duration: float,
+    sectioned: bool = False,
+) -> float:
+    """Convert fitness to a minimization objective."""
+    return -evaluate_individual(genotype_list, gecko_body, duration, sectioned)
