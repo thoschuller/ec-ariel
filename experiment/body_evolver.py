@@ -454,39 +454,41 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s",
         )
         
-        console.log(f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}...")
-        p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
-        gecko_body = HPD.probability_matrices_to_graph(
-            p_matrices[0], p_matrices[1], p_matrices[2]
-        )
-        # Save JSON of best body
-        utils.save_body_to_json(
-            gecko_body,
-            filename=f"best_body_gen{ea.current_generation}_fit{best_fitness:.4f}",
-        )
-        # Save weights of best brain
-        utils.save_brain_genotype(
-            np.array(best_ind.genotype[1]),
-            filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy",
-        )
         
-        console.log(
-            f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
-        )
-        # Record full run and plot
-        tracker = runner.run_bot_session(
-            method="record",
-            weights=np.array(best_ind.genotype[1]),
-            gecko_body=copy.deepcopy(gecko_body),
-            options={
-                "filename": f"best_body_individual_gen{ea.current_generation}",
-                "fitness": best_fitness,
-            },
-            duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
-            spawn_pos=constants.POSITIONS[0][0],
-        )
+        if ea.current_generation % constants.BODY_BATCH_SIZE == 0 or ea.current_generation == 1:
+            console.log(f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}...")
+            p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
+            gecko_body = HPD.probability_matrices_to_graph(
+                p_matrices[0], p_matrices[1], p_matrices[2]
+            )
+            # Save JSON of best body
+            utils.save_body_to_json(
+                gecko_body,
+                filename=f"best_body_gen{ea.current_generation}_fit{best_fitness:.4f}",
+            )
+            # Save weights of best brain
+            utils.save_brain_genotype(
+                np.array(best_ind.genotype[1]),
+                filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy",
+            )
+            
+            console.log(
+                f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
+            )
+            # Record full run and plot
+            tracker = runner.run_bot_session(
+                method="record",
+                weights=np.array(best_ind.genotype[1]),
+                gecko_body=copy.deepcopy(gecko_body),
+                options={
+                    "filename": f"best_body_individual_gen{ea.current_generation}",
+                    "fitness": best_fitness,
+                },
+                duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+                spawn_pos=constants.POSITIONS[0][0],
+            )
 
-        utils.save_xpos_history(tracker, fitness=best_fitness)
+            utils.save_xpos_history(tracker, fitness=best_fitness)
 
         # Stage transitions based on fitness thresholds
         if current_stage == 1:
@@ -553,6 +555,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         np.array(ea.get_solution("best", only_alive=False).genotype[0])
     )
     hpd = HPD
+    
     # record and save best individual
     console.log("Recording best individual of the entire evolution...")
     utils.save_body_to_json(

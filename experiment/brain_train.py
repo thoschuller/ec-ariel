@@ -86,12 +86,18 @@ def evolve_using_cma_es(
     evolution_start_time = time.time()
 
     time_spent_evaluating = 0.0
-    try:
 
-        brain_evo_task = progress.add_task(
+    brain_evo_task = progress.add_task(
             f"CMA-ES Evolution Progress. Current best: ...",
             total=constants.BRAIN_MAX_GENERATIONS,
         )
+
+    try:
+        # Stagnation detection variables
+        stagnation_generations = 0
+        max_stagnation = constants.BRAIN_STAGNATION  # Stop after 5 generations of no improvement
+        best_fitness_so_far = None
+        stagnation_threshold = 1e-4
 
         while not es.stop():
             if (
@@ -114,13 +120,24 @@ def evolve_using_cma_es(
 
             es.disp(constants.BRAIN_BATCH_SIZE)
 
+            current_best_fitness = -es.result.fbest
+            if best_fitness_so_far is None or (current_best_fitness - best_fitness_so_far) > stagnation_threshold:
+                best_fitness_so_far = current_best_fitness
+                stagnation_generations = 0
+            else:
+                stagnation_generations += 1
+                if stagnation_generations >= max_stagnation:
+                    console.log(f"Stagnation detected: no improvement in {max_stagnation} generations. Stopping early.")
+                    break
+
             progress.update(
                 brain_evo_task,
                 advance=1,
-                description=f"CMA-ES Evolution Progress. Current best: {-es.result.fbest}",
+                description=f"CMA-ES Evolution Progress. Current best: {current_best_fitness}",
             )
 
     finally:
+        progress.remove_task(brain_evo_task)        
         if pool:
             pool.close()
             pool.join()
