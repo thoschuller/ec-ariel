@@ -1,5 +1,5 @@
 # from typing import Any, cast
-import experiment.constants as constants
+import constants as constants
 
 # Environment/world class used in some fitness modes
 # from ariel.simulation.environments import OlympicArena
@@ -7,7 +7,7 @@ from ariel.utils.tracker import Tracker
 import numpy as np
 import mujoco
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from experiment.terminal import console
+from terminal import console
 import session_runner as runner
 
 
@@ -20,20 +20,32 @@ def fitness(
     """Evaluate fitness base on history, spawn and goal positions. Penalizes lateral deviation."""
 
     history = tracker.history
-    if not history or len(history) < 2:
-        raise ValueError("Insufficient history data for fitness evaluation.")
+    if not history:
+        raise ValueError("No history data available from tracker.")
+    
+    # Check if required key exists
+    if "xpos" not in history:
+        raise ValueError(f"Missing 'xpos' key in history. Available keys: {list(history.keys())}")
+    
+    # Get the position data for the first tracked object (index 0)
+    if 0 not in history["xpos"]:
+        raise ValueError(f"No tracked object at index 0. Available indices: {list(history['xpos'].keys())}")
+    
+    xpos_data = history["xpos"][0]
+    if len(xpos_data) < 2:
+        raise ValueError(f"Insufficient position history data: only {len(xpos_data)} entries.")
 
     if spawn[1] != goal[1]:
         raise NotImplementedError("Goals with lateral displacement not supported yet.")
 
     # Calculate progress toward goal
     goal_distance = goal[0] - spawn[0]
-    straight_distance = history["xpos"][-1][0] - spawn[0]
+    straight_distance = xpos_data[-1][0] - spawn[0]
     correct_direction: bool = goal_distance * straight_distance > 0
     if not correct_direction:
-        return 0
+        return 0.0
 
-    lateral_deviation = abs(history["xpos"][-1][1] - spawn[1])
+    lateral_deviation = abs(xpos_data[-1][1] - spawn[1])
     countable_distance = (
         abs(straight_distance) - lateral_deviation * constants.LATERAL_PENALTY_FACTOR
     )
@@ -44,9 +56,9 @@ def fitness(
         return basic_fitness
 
     # time can be determined by the position of the first entry in history beyond goal
-    finish_index = int(np.argmax(abs(np.array(history["xpos"])[:, 0]) >= abs(goal[0])))
+    finish_index = int(np.argmax(abs(np.array(xpos_data)[:, 0]) >= abs(goal[0])))
 
-    finish_point = finish_index / len(history["xpos"])
+    finish_point = finish_index / len(xpos_data)
 
     return min(1.0, basic_fitness + (1 - finish_point))
 
@@ -72,18 +84,18 @@ def evaluate_individual(
                     spawn_pos=spawn,
                     duration=duration,
                 )
-                fit = fitness(
-                    tracker,
-                    spawn=spawn,
-                    goal=goal,
-                )
-                fitnesses.append(fit)
-                if fit <= -1:
-                    break  # early stop since lowest fit counts
-
-            return (
-                min(fitnesses) - 1
-            )  # return the minimum fitness across sections to ensure bot can handle all sections
+                try:
+                    fit = fitness(
+                        tracker,
+                        spawn=spawn,
+                        goal=goal,
+                    )
+                    fitnesses.append(fit)
+                except Exception as e:
+                    console.log(f"Fitness calculation failed for section {spawn} to {goal}: {e}")
+                    fitnesses.append(-10000.0)
+                    break
+            return np.mean(fitnesses) if fitnesses else -1000.0 #type: ignore
 
         tracker = runner.run_bot_session(
             weights,
@@ -99,9 +111,11 @@ def evaluate_individual(
             bonus=True,
         )
 
-        return fit
+        return fit+1
     except Exception as e:
-        console.log(f"Evaluation failed for individual: {e}")
+        console.log(f"Evaluation failed for individual: {type(e).__name__}: {str(e)}")
+        import traceback
+        console.log(f"Traceback: {traceback.format_exc()}")
         return -1000.0
     finally:
         mujoco.set_mjcb_control(None)

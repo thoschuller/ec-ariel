@@ -1,10 +1,12 @@
+from typing import Any
+from networkx import DiGraph
 from ariel.utils.tracker import Tracker
 from ariel.simulation.controllers.controller import Controller
 import mujoco
 
 # from typing import Any
-from examples.z_ec_course.A3_template_jack import Vector
-import experiment.constants as constants
+
+import constants as constants
 from ariel.utils.runners import simple_runner
 from ariel.utils.video_recorder import VideoRecorder
 from ariel.utils.renderers import tracking_video_renderer
@@ -12,15 +14,20 @@ import numpy as np
 from pathlib import Path
 from ariel.simulation.environments import BaseWorld
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
-from experiment.terminal import console
+from terminal import console
 from mujoco import viewer
 import copy
 import numpy.typing as npt
+from ariel.body_phenotypes.robogen_lite.constructor import (
+    construct_mjspec_from_graph,
+)
+
+type Vector = npt.NDArray[np.float64]
 
 RNG = np.random.default_rng(constants.SEED)
 
 def initialize_world_and_robot(
-    gecko_body: CoreModule,
+    gecko_body: DiGraph,
     spawn_pos: list[float],
     world: type[BaseWorld] = constants.SIM_WORLD,
 ) -> tuple[object, mujoco.MjData, BaseWorld, Tracker]:
@@ -28,7 +35,7 @@ def initialize_world_and_robot(
 
     world_instance = world()
 
-    usable_gecko = copy.deepcopy(gecko_body)
+    usable_gecko = construct_mjspec_from_graph(gecko_body)
 
     world_instance.spawn(usable_gecko.spec, position=spawn_pos, rotation=[90, 0, 0])
     model = world_instance.spec.compile()

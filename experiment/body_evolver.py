@@ -19,12 +19,13 @@ from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 
 # from ariel.utils.tracker import Tracker
 # from ariel.simulation.controllers.controller import Controller
-import experiment.constants as constants
-from experiment.terminal import console, progress
+import constants as constants
+from terminal import console, progress
 from networkx import DiGraph
-from experiment.utils import numpy_tolist
-import experiment.brain_train as braintrain
-import experiment.utils as utils
+from utils import numpy_tolist
+import brain_train as braintrain
+import utils as utils
+from rich import pretty
 
 RNG = np.random.default_rng(constants.SEED)
 HPD = HighProbabilityDecoder(constants.NUM_OF_MODULES)
@@ -63,12 +64,12 @@ def _train_individual_brain(individual: Individual) -> Individual:
     else:
         p_matrices = NDE.forward(np.array(individual.genotype[0]))
         training_result = braintrain.evolve_using_cma_es(
-            gecko_body=copy.deepcopy(
+            gecko_body=
                 HPD.probability_matrices_to_graph(
                     p_matrices[0],
                     p_matrices[1],
                     p_matrices[2],
-                )
+                
             ),
             duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
             sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
@@ -349,193 +350,186 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
 
     start_time = time.time()
 
-    try:
 
-        # get_pool()
+    # Create initial population
+    console.rule("Creating initial population")
+    population = evaluate_population(
+        initialize_population(_create_population(constants.BODY_POP_SIZE))
+    )
+    console.log(f"Initial population created with {len(population)} individuals.")
+    ops = [
+        EAStep("evaluation", evaluate_population),
+        # EAStep("show_best", show_best_of_population),
+        EAStep("parent_selection", parent_selection),
+        EAStep("crossover", crossover),
+        EAStep("mutation", mutate),
+        EAStep("evalutation", evaluate_population),
+        EAStep("survivor_selection", survivor_selection),
+    ]
+    ea = EA(
+        population=population,
+        operations=ops,
+        quiet=False,
+    )
 
-        # Create initial population
-        console.rule("Creating initial population")
-        population = evaluate_population(
-            initialize_population(_create_population(constants.BODY_POP_SIZE))
+    def terminate() -> bool:
+        if (
+            constants.BODY_MAX_GENERATIONS
+            and ea.current_generation >= constants.BODY_MAX_GENERATIONS
+        ):
+            console.log("Reached maximum generations.")
+            return True
+        if time.time() - start_time >= constants.BODY_TIME_LIMIT:
+            console.log("Reached time limit.")
+            return True
+        return False
+
+    evolution_task = progress.add_task(
+        "[green]Evolving bodies...",
+        total=(
+            constants.BODY_MAX_GENERATIONS
+            if constants.BODY_MAX_GENERATIONS
+            else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
+        ),
+    )
+
+    # Prepare CSV for logging fitness
+    import csv
+
+    fitness_log_path = (
+        constants.OUTPUT
+        / "logs"
+        / f"fitness_log-{time.strftime('%Y%m%d-%H%M%S')}.csv"
+    )
+    # Write header if file does not exist
+    if not fitness_log_path.exists():
+        with open(fitness_log_path, mode="w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["generation", "fitness"])
+
+    ea.fetch_population()
+    for ind in ea.population:
+        with open(fitness_log_path, mode="a", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow([ea.current_generation, ind.fitness])
+
+    while not terminate():
+        console.log(
+            f"Running evolution step for generation {ea.current_generation}..."
         )
-        console.log(f"Initial population created with {len(population)} individuals.")
-        ops = [
-            EAStep("evaluation", evaluate_population),
-            # EAStep("show_best", show_best_of_population),
-            EAStep("parent_selection", parent_selection),
-            EAStep("crossover", crossover),
-            EAStep("mutation", mutate),
-            EAStep("evalutation", evaluate_population),
-            EAStep("survivor_selection", survivor_selection),
-        ]
-        ea = EA(
-            population=population,
-            operations=ops,
-            quiet=False,
-        )
-
-        def terminate() -> bool:
-            if (
-                constants.BODY_MAX_GENERATIONS
-                and ea.current_generation >= constants.BODY_MAX_GENERATIONS
-            ):
-                console.log("Reached maximum generations.")
-                return True
-            if time.time() - start_time >= constants.BODY_TIME_LIMIT:
-                console.log("Reached time limit.")
-                return True
-            return False
-
-        evolution_task = progress.add_task(
-            "[green]Evolving bodies...",
-            total=(
-                constants.BODY_MAX_GENERATIONS
-                if constants.BODY_MAX_GENERATIONS
-                else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
-            ),
-        )
-
-        # Prepare CSV for logging fitness
-        import csv
-
-        fitness_log_path = (
-            constants.OUTPUT
-            / "logs"
-            / f"fitness_log-{time.strftime('%Y%m%d-%H%M%S')}.csv"
-        )
-        # Write header if file does not exist
-        if not fitness_log_path.exists():
-            with open(fitness_log_path, mode="w", newline="") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(["generation", "fitness"])
-
+        ea.step()
+        best_ind = ea.get_solution("best", only_alive=False)
+        best_fitness = best_ind.fitness
+        # Compute average fitness (only for alive individuals)
         ea.fetch_population()
+        # Log to CSV
         for ind in ea.population:
             with open(fitness_log_path, mode="a", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([ea.current_generation, ind.fitness])
 
-        while not terminate():
-            console.log(
-                f"Running evolution step for generation {ea.current_generation}..."
-            )
-            ea.step()
-            best_ind = ea.get_solution("best", only_alive=False)
-            best_fitness = best_ind.fitness
-            # Compute average fitness (only for alive individuals)
-            ea.fetch_population()
-            # Log to CSV
-            for ind in ea.population:
-                with open(fitness_log_path, mode="a", newline="") as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerow([ea.current_generation, ind.fitness])
+        console.log(
+            f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {ea.population_size}"
+        )
+        runtime = time.time() - start_time
+        progress.update(
+            evolution_task,
+            completed=(
+                ea.current_generation if constants.BODY_MAX_GENERATIONS else runtime
+            ),
+            description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s",
+        )
+        console.log(
+            f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
+        )
+        p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
+        gecko_body = HPD.probability_matrices_to_graph(
+            p_matrices[0], p_matrices[1], p_matrices[2]
+        )
+        # Save JSON of best body
+        utils.save_body_to_json(
+            gecko_body,
+            filename=f"best_body_gen{ea.current_generation}_fit{best_fitness:.4f}",
+        )
+        # Save weights of best brain
+        utils.save_weights_to_npz(
+            np.array(best_ind.genotype[1]),
+            filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npz",
+        )
+        # Record full run and plot
+        tracker = runner.run_weights_only(
+            method="record",
+            weights=np.array(best_ind.genotype[1]),
+            gecko_body=copy.deepcopy(gecko_body),
+            options={
+                "filename": f"best_body_individual_gen{ea.current_generation}",
+                "fitness": best_fitness,
+            },
+            duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+        )
 
-            console.log(
-                f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {ea.population_size}"
-            )
-            runtime = time.time() - start_time
-            progress.update(
-                evolution_task,
-                completed=(
-                    ea.current_generation if constants.BODY_MAX_GENERATIONS else runtime
-                ),
-                description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s",
-            )
-            console.log(
-                f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
-            )
-            p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
-            gecko_body = HPD.probability_matrices_to_graph(
-                p_matrices[0], p_matrices[1], p_matrices[2]
-            )
-            # Save JSON of best body
-            utils.save_body_to_json(
-                gecko_body,
-                filename=f"best_body_gen{ea.current_generation}_fit{best_fitness:.4f}",
-            )
-            # Save weights of best brain
-            utils.save_weights_to_npz(
-                np.array(best_ind.genotype[1]),
-                filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npz",
-            )
-            # Record full run and plot
-            tracker = runner.run_weights_only(
-                method="record",
-                weights=np.array(best_ind.genotype[1]),
-                gecko_body=gecko_body,
-                options={
-                    "filename": f"best_body_individual_gen{ea.current_generation}",
-                    "fitness": best_fitness,
-                },
-                duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
-            )
+        utils.save_xpos_history(tracker.history["xpos"], fitness=best_fitness)
 
-            utils.save_xpos_history(tracker.history["xpos"], fitness=best_fitness)
+        # Stage transitions based on fitness thresholds
+        if current_stage == 1:
+            # Stage 1: Sectioned training (fitness in [0, 1])
+            # 0 = no progress, 1 = all sections complete
+            # When sectioned fitness >= 0.15, bots have proven basic locomotion
+            if (
+                best_fitness >= 0.15
+                or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
+                or ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS
+            ):
+                console.rule(
+                    f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
+                )
+                current_stage = 2
 
-            # Stage transitions based on fitness thresholds
-            if current_stage == 1:
-                # Stage 1: Sectioned training (fitness in [-1, 0])
-                # -1 = no progress, 0 = all sections complete
-                # When sectioned fitness >= -0.85, bots have proven basic locomotion
-                if (
-                    best_fitness >= -0.85
-                    or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
-                    or ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS
-                ):
-                    console.rule(
-                        f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
-                    )
-                    current_stage = 2
+        elif current_stage == 2:
+            # Stage 2: Sectioned training (fitness >= 0.15). Higher duration
+            # 0 = no progress, 1 = all sections complete
+            # When sectioned fitness >= 0.75, sections are performing very well
+            if (
+                best_fitness >= 0.75
+                or (time.time() - start_time) > 0.6 * constants.BODY_TIME_LIMIT
+                or ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS
+            ):
+                console.rule(
+                    f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
+                )
+                current_stage = "FULL"
 
-            elif current_stage == 2:
-                # Stage 2: Sectioned training (fitness in [-1, 0])
-                # -1 = no progress, 0 = all sections complete
-                # When sectioned fitness >= -0.2, sections are performing very well
-                if (
-                    best_fitness >= -0.2
-                    or (time.time() - start_time) > 0.6 * constants.BODY_TIME_LIMIT
-                    or ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS
-                ):
-                    console.rule(
-                        f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
-                    )
-                    current_stage = "FULL"
+        elif current_stage == "FULL":
+            # Stage Full training (fitness >= 1). High duration
+            # 2 = reached goal, up to 3 for time bonus
+            if (
+                best_fitness >= 2
+                or (time.time() - start_time) > 0.8 * constants.BODY_TIME_LIMIT
+                or ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS
+            ):
+                console.rule(
+                    f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
+                )
+                current_stage = 3
 
-            elif current_stage == "FULL":
-                # Stage Full training (fitness >= 0). High duration
-                # 1 = reached goal, up to 2 for time bonus
-                if (
-                    best_fitness >= 1
-                    or (time.time() - start_time) > 0.8 * constants.BODY_TIME_LIMIT
-                    or ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS
-                ):
-                    console.rule(
-                        f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
-                    )
-                    current_stage = 3
+        elif current_stage == 3:
+            # Stage 3: Full training (fitness >= 2). Lowered duration for faster iterations
+            # 2 = reached goal, up to 3 for time bonus
+            # at 2.5 fitness, the bots reach the end in 27 seconds
+            if (
+                best_fitness >= 2.5
+                or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
+                or ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS
+            ):
+                console.rule(
+                    f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
+                )
+                break
 
-            elif current_stage == 3:
-                # Stage 3: Full training (fitness >= 0). Lowered duration for faster iterations
-                # 1 = reached goal, up to 2 for time bonus
-                # at 1.7 fitness, the bots reach the end in 27 seconds
-                if (
-                    best_fitness >= 1.5
-                    or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
-                    or ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS
-                ):
-                    console.rule(
-                        f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
-                    )
-                    break
-
-        progress.remove_task(evolution_task)
-        progress.stop()
-
-        console.rule("Evolution process finished.")
-        console.log("Best Fitness:", ea.get_solution("best", only_alive=False).fitness)
-        console.log("Saving best individual...")
+        console.log("Making recordings of best individual of this generation.")
+        
         p_matrices = NDE.forward(
-            np.array(ea.get_solution("best", only_alive=False).genotype[0])
+        np.array(ea.get_solution("best", only_alive=False).genotype[0])
         )
         hpd = HPD
         # record and save best individual
@@ -543,21 +537,21 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             hpd.probability_matrices_to_graph(
                 p_matrices[0], p_matrices[1], p_matrices[2]
             ),
-            filename=f"best_body_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
+            filename=f"best_body_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
         )
         utils.save_weights_to_npz(
             np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-            filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
+            filename=f"best_brain_weights_fit_{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
         )
         tracker = runner.run_bot_session(
             method="record",
             spawn_pos=constants.POSITIONS[0][0],
             weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-            gecko_body=hpd.probability_matrices_to_graph(
+            gecko_body= hpd.probability_matrices_to_graph(
                 p_matrices[0], p_matrices[1], p_matrices[2]
             ),
             options={
-                "filename": f"best_body_individual_final",
+                "filename": f"best_body_individual",
                 "fitness": ea.get_solution("best", only_alive=False).fitness,
             },
             duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
@@ -567,8 +561,47 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             fitness=ea.get_solution("best", only_alive=False).fitness,
         )
 
-    finally:
-        console.log("Evolution process completed.")
+    progress.remove_task(evolution_task)
+
+    console.rule("Evolution process finished.")
+    console.log("Best Fitness:", ea.get_solution("best", only_alive=False).fitness)
+    console.log("Saving best individual...")
+    p_matrices = NDE.forward(
+        np.array(ea.get_solution("best", only_alive=False).genotype[0])
+    )
+    hpd = HPD
+    # record and save best individual
+    utils.save_body_to_json(
+        hpd.probability_matrices_to_graph(
+            p_matrices[0], p_matrices[1], p_matrices[2]
+        ),
+        filename=f"best_body_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
+    )
+    utils.save_weights_to_npz(
+        np.array(ea.get_solution("best", only_alive=False).genotype[1]),
+        filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
+    )
+    tracker = runner.run_bot_session(
+        method="record",
+        spawn_pos=constants.POSITIONS[0][0],
+        weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
+        gecko_body=
+            hpd.probability_matrices_to_graph(
+                p_matrices[0], p_matrices[1], p_matrices[2]
+            
+        ),
+        options={
+            "filename": f"best_body_individual_final",
+            "fitness": ea.get_solution("best", only_alive=False).fitness,
+        },
+        duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+    )
+    utils.save_xpos_history(
+        tracker.history["xpos"],
+        fitness=ea.get_solution("best", only_alive=False).fitness,
+    )
+
+    console.log("Evolution process completed.")
 
     final_ind = ea.get_solution("best", only_alive=False)
     final_fit: float = final_ind.fitness
@@ -582,3 +615,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         p_matrices[0], p_matrices[1], p_matrices[2]
     )
     return final_fit, final_body_genotype, final_brain_genotype, final_graph
+
+if __name__ == "__main__":
+    progress.start()
+    try:
+        pretty.install()
+        body_evolution()
+    finally:
+        progress.stop()

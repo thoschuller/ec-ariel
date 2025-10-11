@@ -1,6 +1,6 @@
 import numpy as np
-import experiment.constants as constants
-from experiment.terminal import console, progress
+import constants as constants
+from terminal import console, progress
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 import session_runner as runner
 from evaluator import minimized_fitness_evaluation

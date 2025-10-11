@@ -5,12 +5,13 @@ from pathlib import Path
 from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     save_graph_as_json,
 )
-from networkx import DiGraph
 from typing import Any
 import mujoco
 import constants
 from ariel.utils.renderers import single_frame_renderer
 import matplotlib.pyplot as plt
+# Type Checking
+from networkx import DiGraph
 
 
 def save_brain_genotype(
@@ -40,7 +41,7 @@ def load_brain_genotype(file_path: str) -> np.ndarray:
     return weights
 
 
-def save_body_to_json(gecko_graph: DiGraph[Any], filename: str = None) -> None:
+def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None:
     """
     Saves the body structure to a JSON file for visualization.
     """
