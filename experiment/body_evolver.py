@@ -359,6 +359,16 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     # Create initial population
     console.rule("Creating initial population")
     population = _create_population(constants.BODY_POP_SIZE)
+
+    #DEBUG: Record full run and plot
+    random_ind_int = RNG.integers(0, len(population))
+    random_ind = population[int(random_ind_int)]
+    debug_p_matrices = NDE.forward(np.array(random_ind.genotype[0]))
+    debug_gecko_body = HPD.probability_matrices_to_graph(*debug_p_matrices)
+    
+    console.log(f"Recording a random individual from initial population for debugging purposes...")
+    console.log(f"Parameters given: duration={constants.STAGE_SETTINGS['FULL']['DURATION']}, spawn_pos={constants.POSITIONS[0][0]}")
+    console.log(debug_gecko_body)
     
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
@@ -443,24 +453,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             ),
             description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s",
         )
-        console.log(
-            f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
-        )
         
-        
-        #DEBUG: save all bodies of current generation to json
-        ea.fetch_population()
-        for i, ind in enumerate(ea.population):
-            p_matrices = NDE.forward(np.array(ind.genotype[0]))
-            gecko_body = HPD.probability_matrices_to_graph(
-                p_matrices[0], p_matrices[1], p_matrices[2]
-            )
-            utils.save_body_to_json(
-                gecko_body,
-                filename=f"gen{ea.current_generation}_ind{i}_fit{ind.fitness:.4f}",
-            )
-        
-        
+        console.log(f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}...")
         p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
         gecko_body = HPD.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
@@ -473,7 +467,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         # Save weights of best brain
         utils.save_brain_genotype(
             np.array(best_ind.genotype[1]),
-            filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npz",
+            filename=f"best_brain_weights_gen{ea.current_generation}_fit{best_fitness:.4f}.npy",
+        )
+        
+        console.log(
+            f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
         )
         # Record full run and plot
         tracker = runner.run_bot_session(
@@ -488,7 +486,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             spawn_pos=constants.POSITIONS[0][0],
         )
 
-        utils.save_xpos_history(tracker.history["xpos"], fitness=best_fitness)
+        utils.save_xpos_history(tracker, fitness=best_fitness)
 
         # Stage transitions based on fitness thresholds
         if current_stage == 1:
@@ -546,41 +544,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 )
                 break
 
-        console.log("Making recordings of best individual of this generation.")
-        
-        p_matrices = NDE.forward(
-        np.array(ea.get_solution("best", only_alive=False).genotype[0])
-        )
-        hpd = HPD
-        # record and save best individual
-        utils.save_body_to_json(
-            hpd.probability_matrices_to_graph(
-                p_matrices[0], p_matrices[1], p_matrices[2]
-            ),
-            filename=f"best_body_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
-        )
-        utils.save_weights_to_npz(
-            np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-            filename=f"best_brain_weights_fit_{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
-        )
-        tracker = runner.run_bot_session(
-            method="record",
-            spawn_pos=constants.POSITIONS[0][0],
-            weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-            gecko_body= hpd.probability_matrices_to_graph(
-                p_matrices[0], p_matrices[1], p_matrices[2]
-            ),
-            options={
-                "filename": f"best_body_individual",
-                "fitness": ea.get_solution("best", only_alive=False).fitness,
-            },
-            duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
-        )
-        utils.save_xpos_history(
-            tracker.history["xpos"],
-            fitness=ea.get_solution("best", only_alive=False).fitness,
-        )
-
     progress.remove_task(evolution_task)
 
     console.rule("Evolution process finished.")
@@ -591,6 +554,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     )
     hpd = HPD
     # record and save best individual
+    console.log("Recording best individual of the entire evolution...")
     utils.save_body_to_json(
         hpd.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
@@ -599,7 +563,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     )
     utils.save_brain_genotype(
         np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-        filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npz",
+        filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npy",
     )
     tracker = runner.run_bot_session(
         method="record",
@@ -617,7 +581,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
     )
     utils.save_xpos_history(
-        tracker.history["xpos"],
+        tracker,
         fitness=ea.get_solution("best", only_alive=False).fitness,
     ) 
 

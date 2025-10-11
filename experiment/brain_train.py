@@ -1,7 +1,7 @@
 import numpy as np
+from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
 import constants as constants
 from terminal import console, progress
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 import session_runner as runner
 from evaluator import minimized_fitness_evaluation
 from ariel.utils.tracker import Tracker
@@ -9,6 +9,7 @@ import multiprocessing
 from functools import partial
 from cma import CMAEvolutionStrategy  # type: ignore[reportMissingTypeStubs]
 import time
+from networkx import DiGraph
 
 
 def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
@@ -26,7 +27,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
 
 
 def evolve_using_cma_es(
-    gecko_body: CoreModule, duration: float, sectioned: bool
+    gecko_body: DiGraph, duration: float, sectioned: bool # type: ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Main evolutionary loop using CMA-ES. Returns (best_individual.genotype, best_fitness, best_tracker).
@@ -53,8 +54,8 @@ def evolve_using_cma_es(
 
     console.rule("[green]Starting CMA-ES Run")
 
-    model, _, _, _ = runner.initialize_world_and_robot(
-        gecko_body=gecko_body, spawn_pos=constants.POSITIONS[0][0]
+    model, _, _ = runner.quick_spawn(
+        gecko_body=construct_mjspec_from_graph(gecko_body), spawn_pos=constants.POSITIONS[0][0]
     )
 
     input_size = model.nq

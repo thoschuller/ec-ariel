@@ -6,10 +6,9 @@ import constants as constants
 from ariel.utils.tracker import Tracker
 import numpy as np
 import mujoco
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from terminal import console
 import session_runner as runner
-
+from networkx import DiGraph
 
 def fitness(
     tracker: Tracker,
@@ -65,7 +64,7 @@ def fitness(
 
 def evaluate_individual(
     genotype_list: list[float],
-    gecko_body: CoreModule,
+    gecko_body: DiGraph, # pyright: ignore
     duration: float,
     sectioned: bool = False,
 ) -> float:
@@ -123,7 +122,7 @@ def evaluate_individual(
 
 def minimized_fitness_evaluation(
     genotype_list: list[float],
-    gecko_body: CoreModule,
+    gecko_body: DiGraph, # pyright: ignore
     duration: float,
     sectioned: bool = False,
 ) -> float:

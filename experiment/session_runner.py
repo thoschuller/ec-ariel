@@ -8,80 +8,43 @@ import mujoco
 import constants as constants
 from ariel.utils.runners import simple_runner
 from ariel.utils.video_recorder import VideoRecorder
-from ariel.utils.renderers import tracking_video_renderer
+from ariel.utils.renderers import video_renderer
 import numpy as np
 from pathlib import Path
-from ariel.simulation.environments import BaseWorld
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from terminal import console
 from mujoco import viewer
 import numpy.typing as npt
-from ariel.body_phenotypes.robogen_lite.constructor import (
-    construct_mjspec_from_graph,
-)
+from ariel.simulation.environments import BaseWorld
+from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
+from typing import cast
+from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
 
 type Vector = npt.NDArray[np.float64]
 
 RNG = np.random.default_rng(constants.SEED)
 
-def initialize_world_and_robot(
-    gecko_body: DiGraph, # pyright: ignore
+
+def quick_spawn(
+    gecko_body: CoreModule,
     spawn_pos: list[float],
-    world: type[BaseWorld] = constants.SIM_WORLD,
-) -> tuple[object, mujoco.MjData, BaseWorld, Tracker]:
+) -> tuple[mujoco.MjModel, mujoco.MjData, BaseWorld]:
     mujoco.set_mjcb_control(None)
-
-    world_instance = world()
-
-    usable_gecko = construct_mjspec_from_graph(gecko_body)
-
-    world_instance.spawn(usable_gecko.spec, position=spawn_pos, rotation=[90, 0, 0])
-    model = world_instance.spec.compile()
+    world = constants.SIM_WORLD()
+    temp_robot_xml = gecko_body.spec.to_xml()
+    temp_robot = mujoco.MjSpec.from_string(temp_robot_xml)
+    world.spawn(
+        temp_robot,
+        position=spawn_pos,
+    )
+    model = world.spec.compile()
     data = mujoco.MjData(model)
-
     mujoco.mj_resetData(model, data)
-
-    # Create tracker for position and orientation data
-    tracker = Tracker(
-        mujoco_obj_to_find=mujoco.mjtObj.mjOBJ_GEOM,
-        name_to_bind="core",
-        observable_attributes=["xpos", "xmat"],
-    )
-
-    return model, data, world_instance, tracker
-
-
-def _find_track_body_name(model: mujoco.MjModel) -> str:
-    """
-    Find a valid body name to track for video recording.
-    Preference order:
-    1) Any body with 'core' in its name.
-    2) The first non-world body (id 1) if available.
-    This avoids passing an invalid name to tracking_video_renderer.
-    """
-    # Prefer names containing 'core'
-    for i in range(model.nbody):
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
-        if name and "core" in name:
-            return name
-    # Fallback: first non-world body if exists
-    console.log(
-        f"Warning: No body with 'core' in name found, using first non-world body if available."
-    )
-    if model.nbody > 1:
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, 1)
-        if name:
-            console.log(f"Using first non-world body: {name}")
-            return name
-    # Last resort: return an empty string (renderer may use default camera)
-    console.log("No valid body found for tracking.")
-    return ""
-
+    return (cast("mujoco.MjModel", model), data, world)
 
 def run_bot_session(
     weights: np.ndarray,
     method: str,
-    gecko_body: CoreModule,
+    gecko_body: DiGraph, # pyright: ignore
     duration: float,
     spawn_pos: list[float],
     options: dict[str, str | float] | None = None,
@@ -93,10 +56,16 @@ def run_bot_session(
     # Clear any existing MuJoCo callbacks for process isolation
     mujoco.set_mjcb_control(None)
 
-    model, data, world, tracker = initialize_world_and_robot(gecko_body, spawn_pos)
+    model, data, world = quick_spawn(construct_mjspec_from_graph(gecko_body), spawn_pos)
+    
+    tracker = Tracker(
+        mujoco_obj_to_find=mujoco.mjtObj.mjOBJ_GEOM,
+        name_to_bind="core",
+        observable_attributes=["xpos", "xmat"],
+    )
 
     # Define controller callback
-    def _controller_callback(_: mujoco.MjModel, d: mujoco.MjData) -> np.ndarray:
+    def _controller_callback(m: mujoco.MjModel, d: mujoco.MjData) -> np.ndarray:
         outputs = _controller(
             data=d,
             weights=weights,
@@ -140,13 +109,12 @@ def run_bot_session(
                 fps=30,
             )
             # Choose a safe body to track for the camera
-            body_name_to_track = _find_track_body_name(model)
-            tracking_video_renderer(
+            #DEBUG: Causing issues right now, switched from tracking to non-tracking
+            video_renderer(
                 model,
                 data,
                 duration=10 + run_duration,
                 video_recorder=video_recorder,
-                geom_to_track=body_name_to_track,
             )
             mujoco.set_mjcb_control(None)
             console.log(f"Recorded episode saved to {video_path}/{video_file}")
@@ -164,8 +132,8 @@ def run_bot_session(
     return tracker
 
 class RandomNN:
-    def __init__(self, robot: CoreModule) -> None:
-        _, data, _, _ = initialize_world_and_robot(gecko_body=robot, spawn_pos=[0, 0, 0])
+    def __init__(self, robot: DiGraph) -> None: # pyright: ignore
+        _, data, _ = quick_spawn(gecko_body=construct_mjspec_from_graph(robot), spawn_pos=[0, 0, 0])
 
         # Get relevant info
         self.input_size = len(data.qpos.copy())
