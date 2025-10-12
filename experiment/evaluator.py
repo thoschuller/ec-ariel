@@ -40,14 +40,23 @@ def fitness(
     # change start to a few seconds later to account for weird spawns
     start = xpos_data[3]
 
-    # Calculate progress toward goal
+    # Find the last position with a positive z value
+    last_pos_with_positive_z = None
+    for pos in reversed(xpos_data):
+        if len(pos) > 2 and pos[2] > 0:
+            last_pos_with_positive_z = pos
+            break
+    if last_pos_with_positive_z is None:
+        # If no positive z found, fallback to last position
+        last_pos_with_positive_z = xpos_data[-1]
+
     goal_distance = goal[0] - start[0]
-    straight_distance = xpos_data[-1][0] - start[0]
+    straight_distance = last_pos_with_positive_z[0] - start[0]
     correct_direction: bool = goal_distance * straight_distance > 0
     if not correct_direction:
         return 0.0
 
-    lateral_deviation = abs(xpos_data[-1][1] - start[1])
+    lateral_deviation = abs(last_pos_with_positive_z[1] - start[1])
     countable_distance = (
         abs(straight_distance) - lateral_deviation * constants.LATERAL_PENALTY_FACTOR
     )

@@ -374,6 +374,7 @@ def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = cons
 
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
+        console.log(tracker.history)
     except Exception as e:
         msg = f"[red] [ERROR] Exception in plot_saved_phenotype: {e}[/red]"
         console.log(f"[red] [ERROR] Failed to plot saved phenotype: {e}[/red]")
