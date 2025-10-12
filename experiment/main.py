@@ -10,7 +10,6 @@ if __name__ == "__main__":
     parser.add_argument("--evolve", choices=["body", "brain"], help="Evolve mode: 'body' or 'brain'.")
     parser.add_argument("--brain", type=str, help="Path to the brain .npy file (for plotting/recording).")
     parser.add_argument("--body", type=str, help="Path to the body .json file (for plotting/recording or brain evolution).")
-    parser.add_argument("--brain", type=str, help="Path to the weights file (for brain evolution, optional).")
     parser.add_argument(
         "--duration", type=float, default=constants.STAGE_SETTINGS["FULL"]["DURATION"], help="Duration of the simulation."
     )
@@ -19,6 +18,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Record a video with a default filename (output.mp4).",
     )
+    parser.add_argument(
+            "--plot",
+            action="store_true",
+            default=False,
+            help="Plot the phenotype (default action if no other action is specified)."
+        )
     parser.add_argument(
         "--method",
         type=str,
@@ -34,6 +39,7 @@ if __name__ == "__main__":
     try:       
         
         console.rule("Starting Ministry of Silly Walks AI...")
+        
         
         if args.evolve == "body":
             console.log("Running body evolution...")

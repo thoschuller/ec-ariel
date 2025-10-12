@@ -122,7 +122,7 @@ def evolve_using_cma_es(
 
     brain_evo_task = progress.add_task(
             f"CMA-ES Evolution Progress. Current best: ...",
-            total=constants.BRAIN_MAX_GENERATIONS,
+            total=constants.BRAIN_MAX_GENERATIONS if constants.BRAIN_MAX_GENERATIONS else time_limit,
         )
 
     try:
@@ -183,7 +183,7 @@ def evolve_using_cma_es(
 
             progress.update(
                 brain_evo_task,
-                advance=1,
+                completed=es.countiter if constants.BRAIN_MAX_GENERATIONS else (time.time() - evolution_start_time),
                 description=f"CMA-ES Evolution Progress. Current best: {current_best_fitness}",
             )
 
