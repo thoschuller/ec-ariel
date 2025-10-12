@@ -70,9 +70,8 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         # Only use valid (finite) positions
         finite_mask = np.all(np.isfinite(pos_data), axis=1)
         if not np.any(finite_mask):
-            msg = "[OUTPUT] No valid positions to plot in xpos history. Skipping plot."
+            msg = "[red] [ERROR] No valid positions to plot in xpos history. Skipping plot."
             console.log(msg)
-            print(msg)
             import sys
             sys.stdout.flush()
             return
@@ -263,9 +262,9 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
 
         console.log(f"Saved xpos history plot to {plots_dir / filename}")
     except Exception as e:
-        msg = f"[OUTPUT] Exception in save_xpos_history: {e}"
+        msg = f"[red] [ERROR] Exception in save_xpos_history: {e}"
         console.log(f"[red]Failed to save xpos history plot: {e}[/red]")
-        print(msg)
+        console.log(msg)
         import traceback
         traceback.print_exc()
         import sys
@@ -338,9 +337,9 @@ def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: f
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
     except Exception as e:
-        msg = f"[OUTPUT] Exception in plot_and_record_saved_phenotype: {e}"
-        console.log(f"[red]Failed to plot and record saved phenotype: {e}[/red]")
-        print(msg)
+        msg = f"[red] [ERROR] Exception in plot_and_record_saved_phenotype: {e}"
+        console.log(f"[red] [ERROR] Failed to plot and record saved phenotype: {e}[/red]")
+        console.log(msg)
         import traceback
         traceback.print_exc()
         import sys
@@ -376,61 +375,12 @@ def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = cons
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
     except Exception as e:
-        msg = f"[OUTPUT] Exception in plot_saved_phenotype: {e}"
-        console.log(f"[red]Failed to plot saved phenotype: {e}[/red]")
-        print(msg)
+        msg = f"[red] [ERROR] Exception in plot_saved_phenotype: {e}[/red]"
+        console.log(f"[red] [ERROR] Failed to plot saved phenotype: {e}[/red]")
+        console.log(msg)
         import traceback
         traceback.print_exc()
         import sys
         sys.stdout.flush()
     
 
-if __name__ == "__main__":
-    import argparse
-    import sys
-
-    parser = argparse.ArgumentParser(description="Plot and record saved phenotype.")
-    parser.add_argument("--brain", type=str, required=True, help="Path to the brain .npy file.")
-    parser.add_argument("--body", type=str, required=True, help="Path to the body .json file.")
-    parser.add_argument(
-        "--duration", type=float, default=constants.STAGE_SETTINGS["FULL"]["DURATION"], help="Duration of the simulation."
-    )
-    parser.add_argument(
-        "--video",
-        action="store_true",
-        help="Record a video with a default filename (output.mp4).",
-    )
-    parser.add_argument(
-        "--method",
-        type=str,
-        default="headless",
-        help="Method for running the session (record, headless, etc.).",
-    )
-
-    args = parser.parse_args()
-
-    print("[OUTPUT] Starting plot and record process...")
-    sys.stdout.flush()
-    try:
-        if args.video:
-            plot_and_record_saved_phenotype(
-                brain_file=args.brain,
-                body_file=args.body,
-                duration=args.duration,
-                video_filename="output.mp4",
-            )
-            print("[OUTPUT] Recording and plotting completed.")
-        else:
-            plot_saved_phenotype(
-                brain_file=args.brain,
-                body_file=args.body,
-                duration=args.duration,
-                method=args.method,
-            )
-            print("[OUTPUT] Plotting completed.")
-        sys.stdout.flush()
-    except Exception as e:
-        print(f"[ERROR] Exception in main: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.stdout.flush()
