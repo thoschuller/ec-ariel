@@ -52,7 +52,7 @@ def fitness(
         abs(straight_distance) - lateral_deviation * constants.LATERAL_PENALTY_FACTOR
     )
 
-    basic_fitness = max(0.0, countable_distance / abs(goal_distance))
+    basic_fitness = min(1.0, max(0.0, countable_distance / abs(goal_distance)))
 
     if basic_fitness < 1 or not bonus:
         return basic_fitness
