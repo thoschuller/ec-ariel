@@ -8,29 +8,28 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Iterable
+from typing import Optional
 
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
 from watchdog.observers import Observer
 
-# --- Settings ---
+# --- Config ---
 VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".mkv", ".avi"}
-STABLE_CHECKS = 3         # number of consecutive equal sizes
-STABLE_INTERVAL = 1.5     # seconds between size checks
-DEFAULT_LEGACY = {"mp4v", "mjpeg"}  # normalized labels (mpeg4 -> mp4v)
+STABLE_CHECKS = 3
+STABLE_INTERVAL = 1.5
+DEFAULT_LEGACY = {"mp4v", "mjpeg"}  # mpeg4 wordt genormaliseerd naar mp4v
 
 # --- Helpers ---
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 def ffprobe_codec(path: Path) -> Optional[str]:
-    """Return video codec_name, e.g. 'h264', 'mpeg4', 'mjpeg', 'hevc', 'av1'."""
     cmd = [
         "ffprobe", "-v", "error",
         "-select_streams", "v:0",
         "-show_entries", "stream=codec_name",
         "-of", "json",
-        str(path)
+        str(path),
     ]
     p = run(cmd)
     if p.returncode != 0:
@@ -50,7 +49,7 @@ def ffprobe_audio_codec(path: Path) -> Optional[str]:
         "-select_streams", "a:0",
         "-show_entries", "stream=codec_name",
         "-of", "json",
-        str(path)
+        str(path),
     ]
     p = run(cmd)
     if p.returncode != 0:
@@ -65,36 +64,30 @@ def ffprobe_audio_codec(path: Path) -> Optional[str]:
         return None
 
 def normalize_codec(name: Optional[str]) -> str:
-    """Normalize various labels to a small set we match against."""
     if not name:
         return "unknown"
     name = name.lower()
     if name == "mpeg4":
-        return "mp4v"       # MPEG-4 Part 2
-    if name in {"mjpeg"}:
-        return "mjpeg"
-    if name in {"msmpeg4v2", "msmpeg4v3"}:
+        return "mp4v"
+    if name in {"mjpeg", "msmpeg4v2", "msmpeg4v3"}:
         return name
     return name
 
 def parse_codec_list(s: Optional[str]) -> set[str]:
-    """Parse comma-separated codec list and normalize."""
     if not s:
         return set()
     items = {normalize_codec(x.strip()) for x in s.split(",") if x.strip()}
     return {x for x in items if x != "unknown"}
 
 def swap_ext_keep_last_dot(p: Path, new_suffix: str, outdir: Optional[Path] = None) -> Path:
-    """Replace only the last file extension, preserving earlier dots in the name."""
     name = p.name
     if name.startswith(".") and name.count(".") == 1:
-        base = name  # treat dotfile (e.g., .bashrc) as no extension
+        base = name
     else:
         base = name.rsplit(".", 1)[0]
     return (outdir or p.parent) / (base + new_suffix)
 
 def is_size_stable(path: Path) -> bool:
-    """Return True when file size stopped changing for STABLE_CHECKS intervals."""
     last = -1
     stable = 0
     while True:
@@ -115,7 +108,6 @@ def should_handle(path: Path) -> bool:
     return path.suffix.lower() in VIDEO_EXTS
 
 def has_encoder(name_substring: str) -> bool:
-    """Return True if `ffmpeg -encoders` lists an encoder containing substring."""
     enc = run(["ffmpeg", "-hide_banner", "-encoders"])
     return enc.returncode == 0 and (name_substring in enc.stdout)
 
@@ -128,39 +120,31 @@ def build_ffmpeg_cmd(
     preset: Optional[str],
     two_pass: bool,
 ) -> list[list[str]]:
-    """
-    Return one or two ffmpeg command lines (for 1-pass or 2-pass).
-    target: 'hevc' or 'av1'
-    """
     if target == "hevc":
         vcodec = "libx265"
-        vtag = "hvc1"  # Safari/iOS friendly
+        vtag = "hvc1"
         crf = 23 if crf is None else crf
         preset = "medium" if preset is None else preset
         vopts = ["-c:v", vcodec, "-tag:v", vtag, "-crf", str(crf), "-preset", preset]
         passes = 1
-
     elif target == "av1":
-        # Prefer SVT-AV1; fallback to libaom-av1
         if has_encoder("libsvtav1"):
             vcodec = "libsvtav1"
             vtag = "av01"
             crf = 28 if crf is None else crf
-            preset = "8" if preset is None else preset  # 0 slow .. 13 fast
+            preset = "8" if preset is None else preset  # 0=traag..13=snel
             vopts = ["-c:v", vcodec, "-tag:v", vtag, "-crf", str(crf), "-preset", preset]
             passes = 1
         else:
             vcodec = "libaom-av1"
             vtag = "av01"
             crf = 30 if crf is None else crf
-            # aom speed via -cpu-used (0 best .. 8 fastest); we map preset string to number if given
-            cpu_used = preset if (preset and preset.isdigit()) else "3"
+            cpu_used = preset if (preset and preset.isdigit()) else "3"  # 0..8
             vopts = ["-c:v", vcodec, "-tag:v", vtag, "-crf", str(crf), "-cpu-used", cpu_used]
             passes = 2 if two_pass else 1
     else:
         raise ValueError("target must be 'hevc' or 'av1'")
 
-    # Audio: copy if AAC/Opus, else transcode to AAC
     acodec_src = ffprobe_audio_codec(src)
     if acodec_src and acodec_src.lower() in {"aac", "libfdk_aac", "opus"}:
         aopts = ["-c:a", "copy"]
@@ -190,9 +174,8 @@ def transcode(
     outdir: Optional[Path],
     crf: Optional[int],
     preset: Optional[str],
-    two_pass: bool
+    two_pass: bool,
 ) -> Optional[Path]:
-    """Transcode src to target codec. Returns output path on success, else None."""
     outdir = outdir or src.parent
     suffix = ".hevc.mp4" if target == "hevc" else ".av1.mp4"
     dst = swap_ext_keep_last_dot(src, suffix, outdir)
@@ -206,30 +189,33 @@ def transcode(
         print(f"[ffmpeg] pass {i}/{len(cmds)}: {' '.join(shlex.quote(c) for c in cmd)}")
         p = run(cmd)
         if p.returncode != 0:
-            # Cleanup partials & pass logs
             try:
-                if dst.exists(): dst.unlink()
+                if dst.exists():
+                    dst.unlink()
             except Exception:
                 pass
             for ext in (".log", ".log.mbtree", ".log.tmp"):
                 maybe = Path(str(dst) + ext)
                 if maybe.exists():
-                    try: maybe.unlink()
-                    except Exception: pass
+                    try:
+                        maybe.unlink()
+                    except Exception:
+                        pass
             print(f"[error] ffmpeg failed:\n{p.stderr}", file=sys.stderr)
             return None
 
-    # Cleanup pass logs
     for ext in (".log", ".log.mbtree", ".log.tmp"):
         maybe = Path(str(dst) + ext)
         if maybe.exists():
-            try: maybe.unlink()
-            except Exception: pass
+            try:
+                maybe.unlink()
+            except Exception:
+                pass
 
     print(f"[done] {src.name} -> {dst.name}")
     return dst
 
-# --- Watcher processing ---
+# --- Watcher ---
 def process_if_needed(
     path: Path,
     target: str,
@@ -251,9 +237,7 @@ def process_if_needed(
     vcodec = normalize_codec(raw)
     print(f"[probe] {path.name} video codec: {raw} -> {vcodec}")
 
-    # Determine the set of legacy codecs to act on
     target_codecs = only_codecs if only_codecs else DEFAULT_LEGACY
-
     if vcodec not in target_codecs:
         print(f"[skip] Not in target codecs {sorted(target_codecs)}: {path.name}")
         return
@@ -294,19 +278,17 @@ class Handler(FileSystemEventHandler):
 # --- CLI ---
 def main():
     ap = argparse.ArgumentParser(
-        description="Watch a directory and transcode newly added legacy videos (mp4v/mjpeg, etc.) to HEVC (hvc1) or AV1 (av01) in MP4."
+        description="Watch a directory and transcode legacy videos (mp4v/mjpeg, etc.) to HEVC (hvc1) or AV1 (av01) in MP4."
     )
     ap.add_argument("watch_dir", nargs="?", default=".", help="Directory to watch (default: current dir)")
     ap.add_argument("--to", choices=["hevc", "av1"], default="hevc", help="Target codec (default: hevc)")
     ap.add_argument("--outdir", type=str, default=None, help="Output directory (default: same as source)")
-    ap.add_argument("--crf", type=int, default=None, help="Override CRF (quality). Lower = better quality/larger file.")
-    ap.add_argument("--preset", type=str, default=None, help="Encoder speed preset. x265: ultrafast..placebo; SVT-AV1: 0..13; libaom-av1 uses digits via -cpu-used.")
-    ap.add_argument("--two-pass", action="store_true", help="Force 2-pass for libaom-av1 (ignored for HEVC or SVT-AV1).")
-    ap.add_argument("--scan-existing", action="store_true", help="Process existing files in the folder at startup.")
+    ap.add_argument("--crf", type=int, default=None, help="Quality (lower = better)")
+    ap.add_argument("--preset", type=str, default=None, help="Speed preset (x265: ultrafast..placebo; SVT-AV1: 0..13; libaom: use digits 0..8)")
+    ap.add_argument("--two-pass", action="store_true", help="2-pass for libaom-av1 (ignored for HEVC/SVT-AV1)")
+    ap.add_argument("--scan-existing", action="store_true", help="Also process existing files at startup")
     ap.add_argument("--only-codecs", type=str, default=None,
-                    help="Comma-separated list of video codecs to transcode (normalized). "
-                         "Examples: 'mpeg4,mjpeg' or 'mp4v,msmpeg4v2'. "
-                         "Defaults to mp4v,mjpeg.")
+                    help="Comma-separated video codecs to transcode (normalized). Example: 'mpeg4,mjpeg' or 'mp4v,msmpeg4v2'. Default: mp4v,mjpeg.")
     args = ap.parse_args()
 
     watch_dir = Path(args.watch_dir).resolve()
@@ -324,13 +306,11 @@ def main():
     else:
         print(f"[config] only_codecs={sorted(DEFAULT_LEGACY)} (default)")
 
-    # Optionally process existing files once
     if args.scan_existing:
         for p in sorted(watch_dir.iterdir()):
             if p.is_file() and should_handle(p):
                 process_if_needed(p, args.to, outdir, args.crf, args.preset, args.two_pass, only_codecs)
 
-    # Start watchdog
     event_handler = Handler(args.to, outdir, args.crf, args.preset, args.two_pass, only_codecs)
     observer = Observer()
     observer.schedule(event_handler, str(watch_dir), recursive=False)
