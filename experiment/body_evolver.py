@@ -131,12 +131,20 @@ def train_and_evaluate_individual(individual: Individual) -> Individual:
     return individual
 
 
+def reset_tags(population: Population) -> Population:
+    for ind in population:
+        ind.tags["mut"] = False
+        ind.tags["ps"] = False
+    return population
+    
+
+
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
     start_time = time.time()
     new_population = []
     re_evaluated = 0
-    eval_inds = [ind for ind in population if ind.requires_eval]
+    eval_inds = [ind for ind in population if ind.requires_eval == True]
     console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
@@ -145,7 +153,7 @@ def evaluate_population(population: Population) -> Population:
         new_population.append(train_and_evaluate_individual(individual))
         re_evaluated += 1
         progress.update(evaluation_task, advance=1)
-    for individual in [ind for ind in population if not ind.requires_eval]:
+    for individual in [ind for ind in population if ind.requires_eval == False]:
         new_population.append(individual)
     evaluation_time = time.time() - start_time
     console.log(
@@ -218,8 +226,13 @@ def survivor_selection(population: Population) -> Population:
         survivors.sort(key=lambda ind: ind.fitness, reverse=True)
         survivors = survivors[: constants.BODY_POP_SIZE]
 
+    for ind in population:
+        if ind not in survivors:
+            ind.alive = False
+
     task_time = time.time() - start_time
     progress.remove_task(task)
+    console.log(f"Population size was {len(population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}")
     console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
 
     return survivors
@@ -252,8 +265,12 @@ def crossover_individuals(
     # Decide which to crossover and which to clone directly
 
     if np.random.random() < 0.25:
-        child_i = parent_i
-        child_j = parent_j
+        child_i = Individual()
+        child_i.genotype = parent_i.genotype
+        child_i.requires_eval = False
+        child_j = Individual()
+        child_j.genotype = parent_j.genotype
+        child_j.requires_eval = False
 
     else:
         child_i = Individual()
@@ -267,8 +284,11 @@ def crossover_individuals(
         child_j.genotype = (body_genotype_j, None)
         child_j.requires_eval = True
 
-    child_i.tags["mut"] = True
-    child_j.tags["mut"] = True
+    child_i.tags["mut"] = np.random() < 0.5
+    child_j.tags["mut"] = np.random() < 0.5
+
+    child_i.requires_init = False
+    child_j.requires_init = False
 
     ind1.tags["ps"] = False
     ind2.tags["ps"] = False
@@ -282,7 +302,7 @@ def crossover(population: Population) -> Population:
 
     console.log("Starting crossover...")
     start_time = time.time()
-    parents = [ind for ind in population if ind.tags.get("ps", False)]
+    parents = [ind for ind in population if ind.tags["ps"] == True]
 
     task = progress.add_task("[green]Crossover...", total=len(parents) // 2)
     progress.start_task(task)
@@ -294,6 +314,8 @@ def crossover(population: Population) -> Population:
         child_i, child_j = crossover_individuals(parent_i, parent_j)
         population.extend([child_i, child_j])
         progress.update(task, advance=1)
+        parent_i.tags["ps"] = False
+        parent_j.tags["ps"] = False
     task_time = time.time() - start_time
     progress.remove_task(task)
     console.log(f"Crossover completed in {task_time:.2f} seconds.")
@@ -334,14 +356,14 @@ def mutate(
     console.log("Starting mutation...")
     start_time = time.time()
     new_population = []
-    mutable_inds = [ind for ind in population if ind.tags.get("mut", True)]
+    mutable_inds = [ind for ind in population if ind.tags["mut"] == True]
     task = progress.add_task("[green]Mutating individuals...", total=len(mutable_inds))
     progress.start_task(task)
     for individual in mutable_inds:
         mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
         new_population.append(mutated)
         progress.update(task, advance=1)
-    for individual in [ind for ind in population if not ind.tags.get("mut", True)]:
+    for individual in [ind for ind in population if not ind.tags["mut"] == True]:
         new_population.append(individual)
 
     progress.stop_task(task)
@@ -378,6 +400,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
+        EAStep("reset tags", reset_tags)
         EAStep("evaluation", evaluate_population),
         # EAStep("show_best", show_best_of_population),
         EAStep("parent_selection", parent_selection),
@@ -500,9 +523,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         if current_stage == 1:
             # Stage 1: Sectioned training (fitness in [0, 1])
             # 0 = no progress, 1 = all sections complete
-            # When sectioned fitness >= 0.15, bots have proven basic locomotion
+            # When sectioned fitness >= 0.35, bots have proven basic locomotion
             if (
-                best_fitness >= 0.25
+                best_fitness >= 0.35
                 or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
                 or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
