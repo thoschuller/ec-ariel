@@ -26,6 +26,7 @@ from utils import numpy_tolist
 import brain_train as braintrain
 import utils as utils
 from rich import pretty
+from evaluator import evaluate_individual
 
 RNG = np.random.default_rng(constants.SEED)
 HPD = HighProbabilityDecoder(constants.NUM_OF_MODULES)
@@ -130,6 +131,22 @@ def train_and_evaluate_individual(individual: Individual) -> Individual:
     individual.requires_eval = False
     return individual
 
+def evaluate_individual(individual: Individual) -> Individual:
+    p_matrices = NDE.forward(np.array(individual.genotype[0]))
+    result = evaluator.evaluate_individual(    
+        genotype_list=individual.genotype[1]
+        gecko_body=
+            HPD.probability_matrices_to_graph(
+                p_matrices[0],
+                p_matrices[1],
+                p_matrices[2],
+            
+        ),
+        duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
+        sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"]
+    )
+    individual.fitness = result
+    individual.requires_eval = False
 
 def reset_tags(population: Population) -> Population:
     for ind in population:
@@ -138,8 +155,14 @@ def reset_tags(population: Population) -> Population:
     return population
 
 def reset_fitness(population: Population) -> Population:
+    console.log("Re-evaluating ALL fitnesses")
+    eval_task = progress.add_task("Evaluating full population", total=len(population))
     for ind in population:
-        ind.requires_eval = True
+        evaluate_individual(ind)
+        ind.requires_eval = False
+        progress.update(eval_task, advance=1)
+    console.log("Finished evaluating full population")
+    progress.remove_task(eval_task)
     return population
     
 
@@ -149,7 +172,7 @@ def evaluate_population(population: Population) -> Population:
     start_time = time.time()
     new_population = []
     re_evaluated = 0
-    eval_inds = [ind for ind in population if ind.requires_eval == True]
+    eval_inds = [ind for ind in population if (ind.requires_eval == True or ind.fitness is None)]
     console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
@@ -272,9 +295,11 @@ def crossover_individuals(
     if np.random.random() < 0.25:
         child_i = Individual()
         child_i.genotype = parent_i.genotype
+        child_i.fitness = parent_i.fitness
         child_i.requires_eval = False
         child_j = Individual()
         child_j.genotype = parent_j.genotype
+        child_j.fitness = parent_j.fitness
         child_j.requires_eval = False
 
     else:
