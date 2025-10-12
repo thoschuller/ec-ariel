@@ -26,16 +26,16 @@ NUM_HIDDEN_LAYERS = 1
 
 BODY_POP_SIZE = 8
 BODY_MAX_GENERATIONS = None
-BODY_TIME_LIMIT = 60 * 60 * 20  # in seconds
+BODY_TIME_LIMIT = 60 * 60 * 29.5  # in seconds
 UNIFORM_CROSSOVER = True
-BODY_BATCH_SIZE = 5
+BODY_BATCH_SIZE = 3
 
 DETAILED_LOGGING = False
 
 PARALLEL = True
 DEVICE = "cpu"
 PARALLEL_CORES = (
-    multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
+    multiprocessing.cpu_count() if multiprocessing.cpu_count() > 1 else 1
 )
 
 NUM_OF_MODULES = 30
