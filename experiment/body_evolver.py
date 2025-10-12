@@ -447,11 +447,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     """full evolution of body and brain genotypes
     returns fitness, body_genotype, brain_genotype, body_phenotype"""
     console.rule(f"Body evolution started.")
-    progress.add_task("[green]Evolving bodies...", total=(
+    evolution_task = progress.add_task("[green]Evolving bodies...", total=(
         constants.BODY_MAX_GENERATIONS
         if constants.BODY_MAX_GENERATIONS
         else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
-    ))
+    ), start=False)
     
     global current_stage
     
@@ -500,16 +500,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             console.log("Reached time limit.")
             return True
         return False
-
-    evolution_task = progress.add_task(
-        "[green]Evolving bodies...",
-        total=(
-            constants.BODY_MAX_GENERATIONS
-            if constants.BODY_MAX_GENERATIONS
-            else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
-        ),
-        start=False,
-    )
 
     # Prepare CSV for logging fitness
     import csv
