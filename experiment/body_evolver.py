@@ -92,11 +92,9 @@ def _create_population(size: int) -> Population:
         if unique:
             population.append(train_and_evaluate_individual(new_ind))
             progress.update(creation_task, advance=1)
-            
-    trained_population = evaluate_population(population)
         
     progress.remove_task(creation_task)
-    return trained_population
+    return population
 
 def train_and_evaluate_individual_brain(individual: Individual) -> Individual:
     """train the brain of a single individual, keep its body unchanged"""
