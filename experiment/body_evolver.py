@@ -627,7 +627,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             # When sectioned fitness >= 0.75, sections are performing very well
             if (
                 best_fitness >= 0.75
-                or (time.time() - start_time) > 0.6 * constants.BODY_TIME_LIMIT
+                or (time.time() - start_time) > 0.4 * constants.BODY_TIME_LIMIT
                 or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
@@ -659,8 +659,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             # at 2.5 fitness, the bots reach the end in 27 seconds
             if (
                 best_fitness >= 2.9
-                or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
