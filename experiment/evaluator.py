@@ -54,7 +54,7 @@ def fitness(
 
     basic_fitness = min(1.0, max(0.0, countable_distance / abs(goal_distance)))
 
-    if basic_fitness < 1 or not bonus:
+    if basic_fitness < 1.0 or not bonus:
         return basic_fitness
 
     # time can be determined by the position of the first entry in history beyond goal
@@ -62,7 +62,7 @@ def fitness(
 
     finish_point = finish_index / len(xpos_data)
 
-    return min(1.0, basic_fitness + (1 - finish_point))
+    return max(1.0, basic_fitness + (1 - finish_point))
 
 
 def evaluate_individual(

@@ -136,6 +136,11 @@ def reset_tags(population: Population) -> Population:
         ind.tags["mut"] = False
         ind.tags["ps"] = False
     return population
+
+def reset_fitness(population: Population) -> Population:
+    for ind in population:
+        ind.requires_eval = True
+    return population
     
 
 
@@ -533,6 +538,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                     f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
                 )
                 current_stage = 2
+                ea.fetch_population()
+                ea.population = reset_fitness(ea.population)
+
 
         elif current_stage == 2:
             # Stage 2: Sectioned training (fitness >= 0.25). Higher duration
@@ -547,6 +555,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                     f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
                 )
                 current_stage = "FULL"
+                ea.fetch_population()
+                ea.population = reset_fitness(ea.population)
+
 
         elif current_stage == "FULL":
             # Stage Full training (fitness >= 1). High duration
@@ -560,13 +571,15 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                     f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
                 )
                 current_stage = 3
+                ea.fetch_population()
+                ea.population = reset_fitness(ea.population)
 
         elif current_stage == 3:
             # Stage 3: Full training (fitness >= 2). Lowered duration for faster iterations
             # 2 = reached goal, up to 3 for time bonus
             # at 2.5 fitness, the bots reach the end in 27 seconds
             if (
-                best_fitness >= 2.5
+                best_fitness >= 2.9
                 or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
                 or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
