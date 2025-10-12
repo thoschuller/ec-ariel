@@ -14,10 +14,10 @@ SIM_WORLD = OlympicArena
 SEED = 42
 SEGMENT_LENGTH = 250
 
-BRAIN_POP_SIZE = 25
+BRAIN_POP_SIZE = 35
 BRAIN_MAX_GENERATIONS = None
 BRAIN_BATCH_SIZE = 50
-BRAIN_TIME_LIMIT = 60 * 15
+BRAIN_TIME_LIMIT = 60 * 10
 
 HIDDEN_SIZE = 16
 OUTPUT_DELTA = 0.05
@@ -43,7 +43,7 @@ NUM_OF_MODULES = 30
 STAGE_SETTINGS = {
     1: {
         "SECTIONED_MODE": True,
-        "DURATION": 10,
+        "DURATION": 15,
         "MAX_STAGNATION": 8,
         "MAX_STAGNATION_DELTA": 0.0001,
     },
@@ -69,7 +69,7 @@ STAGE_SETTINGS = {
 
 # TODO: check
 POSITIONS = [
-    ([-0.8, 0, 0.1], [1.5, 0, 0.1]),  # Section 1: Flat
-    ([1.5, 0, 0.1], [2.5, 0, 0.1]),  # Section 2: Rugged
-    ([2.75, 0, 0.1], [5.0, 0, 0.5]),  # Section 3: Inclined
+    ([-0.8, 0, 0.1], [0.5, 0, 0.1]),  # Section 1: Flat
+    ([0.5, 0, 0.1], [2.6, 0, 0.1]),  # Section 2: Rugged
+    ([2.5, 0, 0.1], [5.0, 0, 0.5]),  # Section 3: Inclined
 ]

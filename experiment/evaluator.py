@@ -37,8 +37,8 @@ def fitness(
     if spawn[1] != goal[1]:
         raise NotImplementedError("Goals with lateral displacement not supported yet.")
 
-    # change spawn to a fraction of the history to account for weird spawns
-    start = xpos_data[1]
+    # change start to a few seconds later to account for weird spawns
+    start = xpos_data[3]
 
     # Calculate progress toward goal
     goal_distance = goal[0] - start[0]

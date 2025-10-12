@@ -215,6 +215,7 @@ def survivor_selection(population: Population) -> Population:
     survivors = [ind for ind in population if getattr(ind, "alive", True)]
     # If too many, trim to POP_SIZE
     if len(survivors) > constants.BODY_POP_SIZE:
+        survivors.sort(key=lambda ind: ind.fitness, reverse=True)
         survivors = survivors[: constants.BODY_POP_SIZE]
 
     task_time = time.time() - start_time
@@ -501,9 +502,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             # 0 = no progress, 1 = all sections complete
             # When sectioned fitness >= 0.15, bots have proven basic locomotion
             if (
-                best_fitness >= 0.15
+                best_fitness >= 0.25
                 or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS)
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
@@ -511,13 +512,13 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = 2
 
         elif current_stage == 2:
-            # Stage 2: Sectioned training (fitness >= 0.15). Higher duration
+            # Stage 2: Sectioned training (fitness >= 0.25). Higher duration
             # 0 = no progress, 1 = all sections complete
             # When sectioned fitness >= 0.75, sections are performing very well
             if (
                 best_fitness >= 0.75
                 or (time.time() - start_time) > 0.6 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS)
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
@@ -530,7 +531,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 2
                 or (time.time() - start_time) > 0.8 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS)
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
@@ -544,7 +545,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 2.5
                 or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS)
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."

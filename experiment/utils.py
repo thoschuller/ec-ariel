@@ -10,6 +10,11 @@ import mujoco
 import constants
 from ariel.utils.renderers import single_frame_renderer
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
+TARGET_POSITION = constants.POSITIONS[2][1]
+SPAWN_POS = constants.POSITIONS[0][0]
+
 # Type Checking
 from networkx import DiGraph
 from ariel.utils.tracker import Tracker
@@ -55,15 +60,146 @@ def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None: # pyr
 
 
 def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
-
     history = tracker.history["xpos"][0]
+    
     try:
+        
+        SPAWN_POS = constants.POSITIONS[0][0]
+        TARGET_POSITION = constants.POSITIONS[2][1]
+
         plots_dir = constants.OUTPUT / "plots"
         plots_dir.mkdir(exist_ok=True, parents=True)
 
         # Initialize world to get the background
         mujoco.set_mjcb_control(None)
         world = constants.SIM_WORLD()
+        
+        
+        # Add some objects to the world
+        start_sphere = r"""
+        <mujoco>
+            <worldbody>
+                <geom name="green_sphere"
+                size=".1"
+                rgba="0 1 0 1"/>
+            </worldbody>
+        </mujoco>
+        """
+        end_sphere = r"""
+        <mujoco>
+            <worldbody>
+                <geom name="red_sphere"
+                size=".1"
+                rgba="1 0 0 1"/>
+            </worldbody>
+        </mujoco>
+        """
+        target_box = r"""
+        <mujoco>
+            <worldbody>
+                <geom name="magenta_box"
+                    size=".1 .1 .1"
+                    type="box"
+                    rgba="1 0 1 0.75"/>
+            </worldbody>
+        </mujoco>
+        """
+        spawn_box = r"""
+        <mujoco>
+            <worldbody>
+                <geom name="gray_box"
+                size=".1 .1 .1"
+                type="box"
+                rgba="0.5 0.5 0.5 0.5"/>
+            </worldbody>
+        </mujoco>
+        """
+        # Convert list of [x,y,z] positions to numpy array
+        pos_data = np.array(history)
+
+        # Starting point of robot
+        adjustment = np.array((0, 0, TARGET_POSITION[2] + 1))
+        world.spawn(
+            mujoco.MjSpec.from_string(start_sphere),
+            position=pos_data[0] + (adjustment * 1.5),
+            correct_collision_with_floor=False,
+        )
+
+        # End point of robot
+        world.spawn(
+            mujoco.MjSpec.from_string(end_sphere),
+            position=pos_data[-1] + (adjustment * 1.5),
+            correct_collision_with_floor=False,
+        )
+
+        # Target position
+        world.spawn(
+            mujoco.MjSpec.from_string(target_box),
+            position=TARGET_POSITION + adjustment,
+            correct_collision_with_floor=False,
+        )
+
+        # Spawn position of robot
+        world.spawn(
+            mujoco.MjSpec.from_string(spawn_box),
+            position=SPAWN_POS,
+            correct_collision_with_floor=False,
+        )
+
+        # Section border boxes
+        border_box = r"""
+        <mujoco>
+            <worldbody>
+                <geom name="border_box"
+                    size=".1 .1 .1"
+                    type="box"
+                    rgba="0 0 1 0.5"/>
+            </worldbody>
+        </mujoco>
+        """
+        # Border between section 1-2
+        world.spawn(
+            mujoco.MjSpec.from_string(border_box),
+            position=constants.POSITIONS[1][0],
+            correct_collision_with_floor=False,
+        )
+        # Border between section 2-3
+        world.spawn(
+            mujoco.MjSpec.from_string(border_box),
+            position=constants.POSITIONS[2][0],
+            correct_collision_with_floor=False,
+        )
+
+        last_value = None
+        for i in range(len(pos_data)):
+            position = pos_data[i]
+            if last_value is not None:
+                distance = np.abs(np.array(position - last_value)) / 2
+            else:
+                distance = np.array((0.01, 0.01, 0.01))
+            last_value = position
+
+            distance_as_size: str = (
+                f'"{(distance[0] + 0.01):.2f} 0.05 {(distance[2] + 0.01):.2f}"'
+            )
+
+        path_box = rf"""
+        <mujoco>
+            <worldbody>
+                <geom name="yellow_sphere"
+                    type="box"
+                    size={distance_as_size}
+                    rgba="1 1 0 0.9"
+                />
+            </worldbody>
+        </mujoco>
+        """
+        world.spawn(
+            mujoco.MjSpec.from_string(path_box),
+            position=position + (adjustment * 1.25),
+            correct_collision_with_floor=False,
+        )
+
         model = world.spec.compile()
         data = mujoco.MjData(model)
         save_path = str(constants.DATA / "background.png")
@@ -72,52 +208,59 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             data,
             save_path=save_path,
             save=True,
+            width=200,
+            height=600,
+            cam_fovy=8,
+            cam_pos=[2.1, 0, 50],
+            cam_quat=[-0.7071, 0, 0, 0.7071],
         )
 
         # Setup background image
         img = plt.imread(save_path)
         _, ax = plt.subplots()
         ax.imshow(img)
-        w, h, _ = img.shape
 
-        # Convert list of [x,y,z] positions to numpy array
-        pos_data = np.array(history)
-
-        # Calculate initial position
-        x0, y0 = int(h * 0.483), int(w * 0.815)
-        xc, yc = int(h * 0.483), int(w * 0.9205)
-        ym0, ymc = 0, constants.POSITIONS[0][0][0] if hasattr(constants, "POSITIONS") else 0
-
-        # Convert position data to pixel coordinates
-        pixel_to_dist = -((ymc - ym0) / (yc - y0)) if (yc - y0) != 0 else 1
-        pos_data_pixel = [[xc, yc]]
-        for i in range(len(pos_data) - 1):
-            xi, yi, _ = pos_data[i]
-            xj, yj, _ = pos_data[i + 1]
-            xd, yd = (xj - xi) / pixel_to_dist, (yj - yi) / pixel_to_dist
-            xn, yn = pos_data_pixel[i]
-            pos_data_pixel.append([xn + int(xd), yn + int(yd)])
-        pos_data_pixel = np.array(pos_data_pixel)
-
-        # Plot x,y trajectory
-        ax.plot(x0, y0, "kx", label="[0, 0, 0]")
-        ax.plot(xc, yc, "go", label="Start")
-        ax.plot(pos_data_pixel[:, 0], pos_data_pixel[:, 1], "b-", label="Path")
-        ax.plot(pos_data_pixel[-1, 0], pos_data_pixel[-1, 1], "ro", label="End")
-
-        # Add labels and title
-        ax.set_xlabel("X Position")
-        ax.set_ylabel("Y Position")
-        ax.legend()
-
-        # Title with fitness
-        plt.title(
-            "Robot Path in XY Plane" + (f" - Fitness: {fitness:.4f}" if fitness is not None else "")
+        # Add legend to the plot
+        plt.rc("legend", fontsize="small")
+        red_patch = mpatches.Patch(color="red", label="End Position")
+        gray_patch = mpatches.Patch(color="gray", label="Spawn Position")
+        green_patch = mpatches.Patch(color="green", label="Start Position")
+        magenta_patch = mpatches.Patch(color="magenta", label="Target Position")
+        yellow_patch = mpatches.Patch(color="yellow", label="Robot Path")
+        ax.legend(
+            handles=[
+                green_patch,
+                red_patch,
+                magenta_patch,
+                gray_patch,
+                yellow_patch,
+            ],
+            loc="upper left",
+            bbox_to_anchor=(1.05, 1),
         )
 
+        # Add labels and title
+        ax.set_xlabel("Y Position")
+        ax.set_ylabel("X Position")
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
+
+        # Title
+        plt.title(
+            "Robot Path in XY Plane - Fitness: " + (f"{fitness:.4f}" if fitness else "N/A")
+        )
+        
+        
+        
+        
+
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        filename = f"fit_{fitness:.4f}_xpos_history_{timestamp}.png" if fitness is not None else f"xpos_history_{timestamp}.png"
+        
+        filename =  f"fit_{fitness:.4f}_xpos_history_{timestamp}.png"
+
+        # Show results
         plt.savefig(plots_dir / filename)
+
         console.log(f"Saved xpos history plot to {plots_dir / filename}")
     except Exception as e:
         console.log(f"[red]Failed to save xpos history plot: {e}[/red]")
