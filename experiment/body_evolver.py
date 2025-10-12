@@ -236,15 +236,17 @@ def survivor_selection(population: Population) -> Population:
     console.log("Starting survivor selection...")
     task = progress.add_task("[green]Selecting survivors...")
     start_time = time.time()
+    
+    _population = [ind for ind in population if getattr(ind, "alive", True)]
 
     # Shuffle population to avoid bias
-    np.random.shuffle(population)
-    current_pop_size = len(population)
+    np.random.shuffle(_population)
+    current_pop_size = len(_population)
 
     # Iterate in pairs, never go out of bounds
-    for idx in range(0, len(population) - 1, 2):
-        ind_i = population[idx]
-        ind_j = population[idx + 1]
+    for idx in range(0, len(_population) - 1, 2):
+        ind_i = _population[idx]
+        ind_j = _population[idx + 1]
 
         # Kill worse individual
         if ind_i.fitness > ind_j.fitness:
@@ -258,19 +260,19 @@ def survivor_selection(population: Population) -> Population:
             break
 
     # Remove dead individuals to maintain population size
-    survivors = [ind for ind in population if getattr(ind, "alive", True)]
+    survivors = [ind for ind in _population if getattr(ind, "alive", True)]
     # If too many, trim to POP_SIZE
     if len(survivors) > constants.BODY_POP_SIZE:
         survivors.sort(key=lambda ind: ind.fitness, reverse=True)
         survivors = survivors[: constants.BODY_POP_SIZE]
 
-    for ind in population:
+    for ind in _population:
         if ind not in survivors:
             ind.alive = False
 
     task_time = time.time() - start_time
     progress.remove_task(task)
-    console.log(f"Population size was {len(population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}")
+    console.log(f"Population size was {len(_population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}")
     console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
 
     return survivors
@@ -517,7 +519,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
 
     
     ea.fetch_population()
-    for ind in ea.population:
+    for ind in [ind for ind in ea.population if getattr(ind, "alive", True)]:
         with open(fitness_log_path, mode="a", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow([ea.current_generation, ind.fitness])
@@ -535,7 +537,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         # Compute average fitness (only for alive individuals)
         ea.fetch_population()
         # Log to CSV
-        for ind in ea.population:
+        for ind in [ind for ind in ea.population if getattr(ind, "alive", True)]:
             with open(fitness_log_path, mode="a", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([ea.current_generation, ind.fitness])
@@ -611,7 +613,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 )
                 current_stage = 2
                 ea.fetch_population()
-                ea.population = reset_fitness(ea.population)
+                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
                 ea.commit_population()
 
 
@@ -629,7 +631,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 )
                 current_stage = "FULL"
                 ea.fetch_population()
-                ea.population = reset_fitness(ea.population)
+                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
                 ea.commit_population()
 
 
@@ -646,7 +648,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 )
                 current_stage = 3
                 ea.fetch_population()
-                ea.population = reset_fitness(ea.population)
+                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
                 ea.commit_population()
 
         elif current_stage == 3:
