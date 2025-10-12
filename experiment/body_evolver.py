@@ -289,8 +289,8 @@ def crossover_individuals(
         child_j.genotype = (body_genotype_j, None)
         child_j.requires_eval = True
 
-    child_i.tags["mut"] = np.random() < 0.5
-    child_j.tags["mut"] = np.random() < 0.5
+    child_i.tags["mut"] = np.random.random() < 0.5
+    child_j.tags["mut"] = np.random.random() < 0.5
 
     child_i.requires_init = False
     child_j.requires_init = False
