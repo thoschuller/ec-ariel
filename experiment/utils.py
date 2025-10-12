@@ -18,6 +18,7 @@ SPAWN_POS = constants.POSITIONS[0][0]
 # Type Checking
 from networkx import DiGraph
 from ariel.utils.tracker import Tracker
+import evaluator as evaluator
 
 def save_brain_genotype(
     weights: np.ndarray, fitness: float = 0.0, filename: str = None
@@ -61,9 +62,21 @@ def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None: # pyr
 
 def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
     history = tracker.history["xpos"][0]
-    
+
     try:
-        
+        # Convert list of [x,y,z] positions to numpy array
+        pos_data = np.array(history)
+
+        # Only use valid (finite) positions
+        finite_mask = np.all(np.isfinite(pos_data), axis=1)
+        if not np.any(finite_mask):
+            msg = "[OUTPUT] No valid positions to plot in xpos history. Skipping plot."
+            console.log(msg)
+            print(msg)
+            import sys
+            sys.stdout.flush()
+            return
+        valid_pos_data = pos_data[finite_mask]
         SPAWN_POS = constants.POSITIONS[0][0]
         TARGET_POSITION = constants.POSITIONS[2][1]
 
@@ -73,8 +86,7 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         # Initialize world to get the background
         mujoco.set_mjcb_control(None)
         world = constants.SIM_WORLD()
-        
-        
+
         # Add some objects to the world
         start_sphere = r"""
         <mujoco>
@@ -114,21 +126,19 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             </worldbody>
         </mujoco>
         """
-        # Convert list of [x,y,z] positions to numpy array
-        pos_data = np.array(history)
 
         # Starting point of robot
         adjustment = np.array((0, 0, TARGET_POSITION[2] + 1))
         world.spawn(
             mujoco.MjSpec.from_string(start_sphere),
-            position=pos_data[0] + (adjustment * 1.5),
+            position=valid_pos_data[0] + (adjustment * 1.5),
             correct_collision_with_floor=False,
         )
 
-        # End point of robot
+        # End point of robot (last valid position)
         world.spawn(
             mujoco.MjSpec.from_string(end_sphere),
-            position=pos_data[-1] + (adjustment * 1.5),
+            position=valid_pos_data[-1] + (adjustment * 1.5),
             correct_collision_with_floor=False,
         )
 
@@ -170,35 +180,30 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             correct_collision_with_floor=False,
         )
 
-        last_value = None
-        for i in range(len(pos_data)):
-            position = pos_data[i]
-            if last_value is not None:
+        # Draw path box only if there are at least 2 valid positions
+        if len(valid_pos_data) > 1:
+            last_value = valid_pos_data[0]
+            for i in range(1, len(valid_pos_data)):
+                position = valid_pos_data[i]
                 distance = np.abs(np.array(position - last_value)) / 2
-            else:
-                distance = np.array((0.01, 0.01, 0.01))
-            last_value = position
-
-            distance_as_size: str = (
-                f'"{(distance[0] + 0.01):.2f} 0.05 {(distance[2] + 0.01):.2f}"'
-            )
-
-        path_box = rf"""
-        <mujoco>
-            <worldbody>
-                <geom name="yellow_sphere"
-                    type="box"
-                    size={distance_as_size}
-                    rgba="1 1 0 0.9"
-                />
-            </worldbody>
-        </mujoco>
-        """
-        world.spawn(
-            mujoco.MjSpec.from_string(path_box),
-            position=position + (adjustment * 1.25),
-            correct_collision_with_floor=False,
-        )
+                distance_as_size = f'"{(distance[0] + 0.01):.2f} 0.05 {(distance[2] + 0.01):.2f}"'
+                path_box = rf"""
+                <mujoco>
+                    <worldbody>
+                        <geom name="yellow_sphere"
+                            type="box"
+                            size={distance_as_size}
+                            rgba="1 1 0 0.9"
+                        />
+                    </worldbody>
+                </mujoco>
+                """
+                world.spawn(
+                    mujoco.MjSpec.from_string(path_box),
+                    position=position + (adjustment * 1.25),
+                    correct_collision_with_floor=False,
+                )
+                last_value = position
 
         model = world.spec.compile()
         data = mujoco.MjData(model)
@@ -249,13 +254,8 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         plt.title(
             "Robot Path in XY Plane - Fitness: " + (f"{fitness:.4f}" if fitness else "N/A")
         )
-        
-        
-        
-        
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        
         filename =  f"fit_{fitness:.4f}_xpos_history_{timestamp}.png"
 
         # Show results
@@ -263,7 +263,13 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
 
         console.log(f"Saved xpos history plot to {plots_dir / filename}")
     except Exception as e:
+        msg = f"[OUTPUT] Exception in save_xpos_history: {e}"
         console.log(f"[red]Failed to save xpos history plot: {e}[/red]")
+        print(msg)
+        import traceback
+        traceback.print_exc()
+        import sys
+        sys.stdout.flush()
 
 
 
@@ -280,3 +286,151 @@ def numpy_tolist(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] | Any
         return {k: numpy_tolist(v) for k, v in obj.items()}
     else:
         return obj
+    
+def load_json_as_digraph(file_path: str) -> DiGraph: # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType]
+    """
+    Load a body structure from a JSON file and convert it to a DiGraph.
+    """
+    from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
+        load_graph_from_json,
+    )
+
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Body structure file not found: {file_path}")
+    graph = load_graph_from_json(path)
+    console.log(f"Loaded body structure from {file_path}")
+    return graph
+
+def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], video_filename: str = None) -> None:
+    """
+    Loads a saved brain and body, runs a single simulation with video recording, and plots the result.
+    """
+    try:
+        # Load brain weights and body graph
+        weights = load_brain_genotype(brain_file)
+        body_graph = load_json_as_digraph(body_file)
+
+        # Import run_bot_session here to avoid circular imports
+        from session_runner import run_bot_session
+
+        # Use default spawn position from constants
+        spawn_pos = constants.POSITIONS[0][0]
+
+        # Prepare options for video recording
+        options = {}
+        if video_filename:
+            options["video_filename"] = video_filename
+
+        # Run a single simulation with recording
+        tracker = run_bot_session(
+            weights=weights,
+            method="record",
+            gecko_body=body_graph,
+            duration=duration,
+            spawn_pos=spawn_pos,
+            options=options,
+        )
+
+        # Compute fitness if possible (optional, can be None)
+        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+
+        # Plot the result
+        save_xpos_history(tracker, fitness=fitness)
+    except Exception as e:
+        msg = f"[OUTPUT] Exception in plot_and_record_saved_phenotype: {e}"
+        console.log(f"[red]Failed to plot and record saved phenotype: {e}[/red]")
+        print(msg)
+        import traceback
+        traceback.print_exc()
+        import sys
+        sys.stdout.flush()
+
+def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], method: str = "headless") -> None:
+    """
+    Loads a saved brain and body, runs a single simulation, and plots the result.
+    """
+    try:
+        # Load brain weights and body graph
+        weights = load_brain_genotype(brain_file)
+        body_graph = load_json_as_digraph(body_file)
+
+        # Import run_bot_session here to avoid circular imports
+        from session_runner import run_bot_session
+
+        # Use default spawn position from constants
+        spawn_pos = constants.POSITIONS[0][0]
+
+        # Run a single simulation (no extra training)
+        tracker = run_bot_session(
+            weights=weights,
+            method=method,
+            gecko_body=body_graph,
+            duration=duration,
+            spawn_pos=spawn_pos,
+        )
+
+        # Compute fitness if possible (optional, can be None)
+        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+
+        # Plot the result
+        save_xpos_history(tracker, fitness=fitness)
+    except Exception as e:
+        msg = f"[OUTPUT] Exception in plot_saved_phenotype: {e}"
+        console.log(f"[red]Failed to plot saved phenotype: {e}[/red]")
+        print(msg)
+        import traceback
+        traceback.print_exc()
+        import sys
+        sys.stdout.flush()
+    
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="Plot and record saved phenotype.")
+    parser.add_argument("--brain", type=str, required=True, help="Path to the brain .npy file.")
+    parser.add_argument("--body", type=str, required=True, help="Path to the body .json file.")
+    parser.add_argument(
+        "--duration", type=float, default=constants.STAGE_SETTINGS["FULL"]["DURATION"], help="Duration of the simulation."
+    )
+    parser.add_argument(
+        "--video",
+        action="store_true",
+        help="Record a video with a default filename (output.mp4).",
+    )
+    parser.add_argument(
+        "--method",
+        type=str,
+        default="headless",
+        help="Method for running the session (record, headless, etc.).",
+    )
+
+    args = parser.parse_args()
+
+    print("[OUTPUT] Starting plot and record process...")
+    sys.stdout.flush()
+    try:
+        if args.video:
+            plot_and_record_saved_phenotype(
+                brain_file=args.brain,
+                body_file=args.body,
+                duration=args.duration,
+                video_filename="output.mp4",
+            )
+            print("[OUTPUT] Recording and plotting completed.")
+        else:
+            plot_saved_phenotype(
+                brain_file=args.brain,
+                body_file=args.body,
+                duration=args.duration,
+                method=args.method,
+            )
+            print("[OUTPUT] Plotting completed.")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"[ERROR] Exception in main: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()

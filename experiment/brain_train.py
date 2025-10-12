@@ -10,6 +10,28 @@ from functools import partial
 from cma import CMAEvolutionStrategy  # type: ignore[reportMissingTypeStubs]
 import time
 from networkx import DiGraph
+from utils import save_brain_genotype, save_xpos_history, load_brain_genotype, load_json_as_digraph
+
+def train_individual_from_files( # pyright: ignore[reportUnknownParameterType]
+    body_file: str, weights_file: str | None = None
+) -> None:  # type: ignore
+    """
+    Load a genotype and body structure from files for training or evaluation.
+    """
+    weights = None
+    if weights_file is None:
+        weights = load_brain_genotype(weights_file)
+    body_graph = load_json_as_digraph(body_file)
+    evolve_using_cma_es(
+        gecko_body=body_graph,
+        duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+        sectioned=False,
+        stagnation_threshold=constants.STAGE_SETTINGS["FULL"]["MAX_STAGNATION_DELTA"],
+        max_stagnation=constants.STAGE_SETTINGS["FULL"]["MAX_STAGNATION"],
+        record_last=True,
+        initial_weights=weights
+    )
+    
 
 
 def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
@@ -27,7 +49,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
 
 
 def evolve_using_cma_es(
-    gecko_body: DiGraph, duration: float, sectioned: bool, stagnation_threshold: float, max_stagnation: int # type: ignore
+    gecko_body: DiGraph, duration: float, sectioned: bool, stagnation_threshold: float, max_stagnation: int, record_batch: int = None, record_last: bool = False, initial_weights: np.ndarray | None = None # type:ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Main evolutionary loop using CMA-ES. Returns (best_individual.genotype, best_fitness, best_tracker).
@@ -54,26 +76,34 @@ def evolve_using_cma_es(
 
     console.rule("[green]Starting CMA-ES Run")
 
-    model, _, _ = runner.quick_spawn(
-        gecko_body=construct_mjspec_from_graph(gecko_body), spawn_pos=constants.POSITIONS[0][0]
-    )
+    if initial_weights is None:
+        model, _, _ = runner.quick_spawn(
+            gecko_body=construct_mjspec_from_graph(gecko_body), spawn_pos=constants.POSITIONS[0][0]
+        )
 
-    input_size = model.nq
-    output_size = model.nu
-    hidden_size = constants.HIDDEN_SIZE
-    num_hidden_layers = constants.NUM_HIDDEN_LAYERS
-    layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
-    weight_shapes = [
-        (layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)
-    ]
-    total_params = sum(a * b for a, b in weight_shapes)
+        input_size = model.nq
+        output_size = model.nu
+        hidden_size = constants.HIDDEN_SIZE
+        num_hidden_layers = constants.NUM_HIDDEN_LAYERS
+        layer_sizes = [input_size] + [hidden_size] * num_hidden_layers + [output_size]
+        weight_shapes = [
+            (layer_sizes[i], layer_sizes[i + 1]) for i in range(len(layer_sizes) - 1)
+        ]
+        total_params = sum(a * b for a, b in weight_shapes)
 
-    console.log(
-        f"Population Size: {constants.BRAIN_POP_SIZE}, Total Params: {total_params}"
-    )
+        console.log(
+            f"Population Size: {constants.BRAIN_POP_SIZE}, Total Params: {total_params}"
+        )
 
-    # Initialize CMA-ES
-    initial_solution = sample_glorot_flat(weight_shapes)
+        # Initialize CMA-ES
+        initial_solution = sample_glorot_flat(weight_shapes)
+    else:
+        initial_solution = initial_weights
+        total_params = len(initial_solution)
+        console.log(
+            f"Population Size: {constants.BRAIN_POP_SIZE}, Total Params from file: {total_params}"
+        )
+        
     sigma = 0.2  # Initial step size
     options = {
         "popsize": constants.BRAIN_POP_SIZE,
@@ -127,6 +157,23 @@ def evolve_using_cma_es(
                 if stagnation_generations >= max_stagnation:
                     console.log(f"Stagnation detected: no improvement in {max_stagnation} generations. Stopping early.")
                     break
+                
+            if record_batch and es.countiter % record_batch == 0:
+                console.log(f"Recording batch at iteration {es.countiter}")
+                tracker = runner.run_bot_session(
+                    np.array(es.result.xbest, dtype=np.float32),
+                    method="record",
+                    gecko_body=gecko_body,
+                    duration=duration,
+                    spawn_pos=constants.POSITIONS[0][0],
+                    options={
+                        "filename": f"brain_evo_gen{es.countiter}",
+                        "fitness": current_best_fitness,
+                    },
+                )
+
+                save_brain_genotype(np.array(es.result.xbest, dtype=np.float32), fitness=current_best_fitness, filename=f"brain_evo_gen{es.countiter}_best_brain")
+                save_xpos_history(tracker, fitness=current_best_fitness)
 
             progress.update(
                 brain_evo_task,
@@ -144,6 +191,23 @@ def evolve_using_cma_es(
     best_weights_list = result.xbest
     best_weights = np.array(best_weights_list, dtype=np.float32)
     best_fitness = -result.fbest
+
+    if(record_last):
+        console.log(f"Recording final run at iteration {es.countiter}")
+        tracker = runner.run_bot_session(
+            best_weights,
+            method="record",
+            gecko_body=gecko_body,
+            duration=duration,
+            spawn_pos=constants.POSITIONS[0][0],
+            options={
+                "filename": f"brain_evo_final_gen{es.countiter}",
+                "fitness": best_fitness,
+            },
+        )
+
+        save_brain_genotype(best_weights_list, fitness=best_fitness, filename="brain_evo_best_brain")
+        save_xpos_history(tracker, fitness=best_fitness)
 
     tracker = None
 
