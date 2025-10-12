@@ -26,7 +26,7 @@ from utils import numpy_tolist
 import brain_train as braintrain
 import utils as utils
 from rich import pretty
-from evaluator import evaluate_individual
+import evaluator as evaluator
 
 RNG = np.random.default_rng(constants.SEED)
 HPD = HighProbabilityDecoder(constants.NUM_OF_MODULES)
@@ -34,23 +34,34 @@ NDE = NeuralDevelopmentalEncoding(number_of_modules=constants.NUM_OF_MODULES)
 import session_runner as runner
 
 current_stage: int | str = 1
-
-
 def _create_individual() -> Individual:
-    """Create a new individual with Glorot initialization."""
-    individual = initialize_individual(Individual())
-    individual.requires_init = False
+    individual = Individual()
+    
+    individual.genotype = (
+        numpy_tolist(
+            [
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+                RNG.random(64).astype(np.float32),
+            ]
+        ),
+        [],  # brain genotype will be set after training
+    )
+    
+    individual.requires_init = True
     individual.requires_eval = True
     return individual
 
 
+
+
 def _create_population(size: int) -> Population:
     """Create a population of individuals."""
-    initialization_task = progress.add_task(
+    creation_task = progress.add_task(
         "[green]Creating individuals...", total=size
     )
     population = []        
-    while len(population) < constants.BODY_POP_SIZE:
+    while len(population) < size:
         new_ind = _create_individual()
         unique = True
         gecko_body = HPD.probability_matrices_to_graph(
@@ -73,68 +84,58 @@ def _create_population(size: int) -> Population:
                 break
         if unique:
             population.append(train_and_evaluate_individual(new_ind))
-            progress.update(initialization_task, advance=1)
+            progress.update(creation_task, advance=1)
             
     trained_population = evaluate_population(population)
         
-    progress.remove_task(initialization_task)
+    progress.remove_task(creation_task)
     return trained_population
 
-
-def _train_individual_brain(individual: Individual) -> Individual:
+def train_and_evaluate_individual_brain(individual: Individual) -> Individual:
     """train the brain of a single individual, keep its body unchanged"""
     console.log("Starting brain training...")
-    if individual.requires_init:
-        raise ValueError("Individual must be initialized before training its brain.")
-    else:
-        p_matrices = NDE.forward(np.array(individual.genotype[0]))
-        training_result = braintrain.evolve_using_cma_es(
-            gecko_body=
-                HPD.probability_matrices_to_graph(
-                    p_matrices[0],
-                    p_matrices[1],
-                    p_matrices[2],
-                
-            ),
-            duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
-            sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
-            stagnation_threshold=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION_DELTA"],
-            max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"]
-        )
-        individual.genotype = (individual.genotype[0], training_result[0])
-        individual.fitness = training_result[1]
-        individual.requires_eval = False
-    console.log("Brain training completed.")
-    return individual
-
-
-def initialize_individual(individual: Individual) -> Individual:
-    """train and evaluate a single individual, set its fitness attribute"""
-    individual.genotype = (
-        numpy_tolist(
-            [
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
-            ]
+    
+    p_matrices = NDE.forward(np.array(individual.genotype[0]))
+    training_result = braintrain.evolve_using_cma_es(
+        gecko_body=
+            HPD.probability_matrices_to_graph(
+                p_matrices[0],
+                p_matrices[1],
+                p_matrices[2],
+            
         ),
-        [],  # brain genotype will be set after training
+        duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
+        sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
+        stagnation_threshold=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION_DELTA"],
+        max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"]
     )
-    individual = individual
+    individual.genotype = (individual.genotype[0], training_result[0])
+    individual.fitness = training_result[1]
+    individual.requires_eval = False
     individual.requires_init = False
-    individual.requires_eval = True
+    
+    console.log("Brain training completed.")
     return individual
 
 def train_and_evaluate_individual(individual: Individual) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
-    individual = _train_individual_brain(individual)
+    individual = train_and_evaluate_individual_brain(individual)
+    individual.requires_init = False
     individual.requires_eval = False
     return individual
 
 def evaluate_individual(individual: Individual) -> Individual:
+    console.log("Evaluating individual...")
+    
+    if individual.requires_init:
+        individual = train_and_evaluate_individual_brain(individual)
+        individual.requires_init = False
+        individual.requires_eval = False
+        return individual
+    
     p_matrices = NDE.forward(np.array(individual.genotype[0]))
     result = evaluator.evaluate_individual(    
-        genotype_list=individual.genotype[1]
+        genotype_list=individual.genotype[1],
         gecko_body=
             HPD.probability_matrices_to_graph(
                 p_matrices[0],
@@ -147,6 +148,9 @@ def evaluate_individual(individual: Individual) -> Individual:
     )
     individual.fitness = result
     individual.requires_eval = False
+    
+    console.log(f"Individual evaluated with fitness: {individual.fitness}")
+    return individual
 
 def reset_tags(population: Population) -> Population:
     for ind in population:
@@ -172,13 +176,13 @@ def evaluate_population(population: Population) -> Population:
     start_time = time.time()
     new_population = []
     re_evaluated = 0
-    eval_inds = [ind for ind in population if (ind.requires_eval == True or ind.fitness is None)]
+    eval_inds = [ind for ind in population if ind.requires_eval == True]
     console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
     )
     for individual in eval_inds:
-        new_population.append(train_and_evaluate_individual(individual))
+        new_population.append(evaluate_individual(individual))
         re_evaluated += 1
         progress.update(evaluation_task, advance=1)
     for individual in [ind for ind in population if ind.requires_eval == False]:
@@ -291,34 +295,36 @@ def crossover_individuals(
     parent_j = ind2.model_copy(deep=True)
 
     # Decide which to crossover and which to clone directly
+    
+    child_i = Individual()
+    child_j = Individual()
 
     if np.random.random() < 0.25:
-        child_i = Individual()
-        child_i.genotype = parent_i.genotype
-        child_i.fitness = parent_i.fitness
-        child_i.requires_eval = False
-        child_j = Individual()
+        for child in [child_i, child_j]:
+            child.requires_init = False
+            child.requires_eval = False
         child_j.genotype = parent_j.genotype
         child_j.fitness = parent_j.fitness
-        child_j.requires_eval = False
+        
+        
+        child_i.genotype = parent_i.genotype
+        child_i.fitness = parent_i.fitness
 
     else:
-        child_i = Individual()
-        child_j = Individual()
         body_genotype_i, body_genotype_j = Crossover.uniform(
             cast("list[list[float]]", parent_i.genotype[0]),
             cast("list[list[float]]", parent_j.genotype[0]),
         )
         child_i.genotype = (body_genotype_i, None)
-        child_i.requires_eval = True
         child_j.genotype = (body_genotype_j, None)
-        child_j.requires_eval = True
+        
+        for child in [child_i, child_j]:
+            child.requires_init = True
+            child.requires_eval = True
 
-    child_i.tags["mut"] = np.random.random() < 0.5
-    child_j.tags["mut"] = np.random.random() < 0.5
-
-    child_i.requires_init = False
-    child_j.requires_init = False
+    for child in [child_i, child_j]:
+        if(np.random.random() < 0.5):
+            child.tags["mut"] = True
 
     ind1.tags["ps"] = False
     ind2.tags["ps"] = False
@@ -332,7 +338,7 @@ def crossover(population: Population) -> Population:
 
     console.log("Starting crossover...")
     start_time = time.time()
-    parents = [ind for ind in population if ind.tags["ps"] == True]
+    parents = [ind for ind in population if ind.tags.get("ps", False) == True]
 
     task = progress.add_task("[green]Crossover...", total=len(parents) // 2)
     progress.start_task(task)
@@ -372,6 +378,7 @@ def mutate_individual(
     mutated_individual = Individual()
     mutated_individual.genotype = (mutated_body_genotype, None)
     mutated_individual.requires_eval = True
+    mutated_individual.requires_init = True
     mutated_individual.tags = individual.tags.copy()
     mutated_individual.tags["mut"] = False
     return mutated_individual
@@ -386,14 +393,14 @@ def mutate(
     console.log("Starting mutation...")
     start_time = time.time()
     new_population = []
-    mutable_inds = [ind for ind in population if ind.tags["mut"] == True]
+    mutable_inds = [ind for ind in population if ind.tags.get("mut", False) == True]
     task = progress.add_task("[green]Mutating individuals...", total=len(mutable_inds))
     progress.start_task(task)
     for individual in mutable_inds:
         mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
         new_population.append(mutated)
         progress.update(task, advance=1)
-    for individual in [ind for ind in population if not ind.tags["mut"] == True]:
+    for individual in [ind for ind in population if not ind.tags.get("mut", False) == True]:
         new_population.append(individual)
 
     progress.stop_task(task)
@@ -436,7 +443,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         EAStep("parent_selection", parent_selection),
         EAStep("crossover", crossover),
         EAStep("mutation", mutate),
-        EAStep("evalutation", evaluate_population),
+        EAStep("evaluation", evaluate_population),
         EAStep("survivor_selection", survivor_selection),
     ]
     ea = EA(
