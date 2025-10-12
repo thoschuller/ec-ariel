@@ -55,6 +55,7 @@ def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None: # pyr
 
 
 def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
+
     history = tracker.history["xpos"][0]
     try:
         plots_dir = constants.OUTPUT / "plots"
@@ -71,12 +72,7 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             data,
             save_path=save_path,
             save=True,
-            width=200,
-            height=600,
-            cam_fovy=8,
-            cam_pos=[2.1, 0, 50],
-            cam_quat=[-0.7071, 0, 0, 0.7071],
-        )     
+        )
 
         # Setup background image
         img = plt.imread(save_path)
@@ -90,10 +86,10 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         # Calculate initial position
         x0, y0 = int(h * 0.483), int(w * 0.815)
         xc, yc = int(h * 0.483), int(w * 0.9205)
-        ym0, ymc = 0, constants.POSITIONS[0][0][0]
+        ym0, ymc = 0, constants.POSITIONS[0][0][0] if hasattr(constants, "POSITIONS") else 0
 
         # Convert position data to pixel coordinates
-        pixel_to_dist = -((ymc - ym0) / (yc - y0))
+        pixel_to_dist = -((ymc - ym0) / (yc - y0)) if (yc - y0) != 0 else 1
         pos_data_pixel = [[xc, yc]]
         for i in range(len(pos_data) - 1):
             xi, yi, _ = pos_data[i]
@@ -114,18 +110,14 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         ax.set_ylabel("Y Position")
         ax.legend()
 
-        # Title
+        # Title with fitness
         plt.title(
-            "Robot Path in XY Plane - Fitness: " + (f"{fitness:.4f}" if fitness else "N/A")
+            "Robot Path in XY Plane" + (f" - Fitness: {fitness:.4f}" if fitness is not None else "")
         )
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        
-        filename =  f"fit_{fitness:.4f}_xpos_history_{timestamp}.png"
-
-        # Show results
+        filename = f"fit_{fitness:.4f}_xpos_history_{timestamp}.png" if fitness is not None else f"xpos_history_{timestamp}.png"
         plt.savefig(plots_dir / filename)
-
         console.log(f"Saved xpos history plot to {plots_dir / filename}")
     except Exception as e:
         console.log(f"[red]Failed to save xpos history plot: {e}[/red]")

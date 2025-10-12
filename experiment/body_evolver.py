@@ -97,6 +97,8 @@ def _train_individual_brain(individual: Individual) -> Individual:
             ),
             duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
             sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
+            stagnation_threshold=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION_DELTA"],
+            max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"]
         )
         individual.genotype = (individual.genotype[0], training_result[0])
         individual.fitness = training_result[1]
@@ -149,6 +151,7 @@ def evaluate_population(population: Population) -> Population:
     console.log(
         f"Re-evaluated {re_evaluated}/{len(population)} individuals in {evaluation_time:.2f} seconds."
     )
+    progress.remove_task(evaluation_task)
     return new_population
 
 
@@ -500,7 +503,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 0.15
                 or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
-                or ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS)
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
@@ -514,7 +517,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 0.75
                 or (time.time() - start_time) > 0.6 * constants.BODY_TIME_LIMIT
-                or ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS)
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
@@ -527,7 +530,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 2
                 or (time.time() - start_time) > 0.8 * constants.BODY_TIME_LIMIT
-                or ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS)
             ):
                 console.rule(
                     f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
@@ -541,7 +544,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 2.5
                 or (time.time() - start_time) > 0.9 * constants.BODY_TIME_LIMIT
-                or ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS
+                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.9 * constants.BODY_MAX_GENERATIONS)
             ):
                 console.rule(
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
@@ -551,7 +554,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     progress.remove_task(evolution_task)
 
     console.rule("Evolution process finished.")
-    console.log("Best Fitness:", ea.get_solution("best", only_alive=False).fitness)
+    console.log(f"Best Fitness: {ea.get_solution("best", only_alive=False).fitness}")
     console.log("Saving best individual...")
     p_matrices = NDE.forward(
         np.array(ea.get_solution("best", only_alive=False).genotype[0])

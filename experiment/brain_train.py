@@ -27,7 +27,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
 
 
 def evolve_using_cma_es(
-    gecko_body: DiGraph, duration: float, sectioned: bool # type: ignore
+    gecko_body: DiGraph, duration: float, sectioned: bool, stagnation_threshold: float, max_stagnation: int # type: ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Main evolutionary loop using CMA-ES. Returns (best_individual.genotype, best_fitness, best_tracker).
@@ -95,9 +95,7 @@ def evolve_using_cma_es(
     try:
         # Stagnation detection variables
         stagnation_generations = 0
-        max_stagnation = constants.BRAIN_STAGNATION  # Stop after 5 generations of no improvement
         best_fitness_so_far = None
-        stagnation_threshold = 1e-4
 
         while not es.stop():
             if (

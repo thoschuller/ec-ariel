@@ -17,7 +17,7 @@ SEGMENT_LENGTH = 250
 BRAIN_POP_SIZE = 25
 BRAIN_MAX_GENERATIONS = None
 BRAIN_BATCH_SIZE = 50
-BRAIN_TIME_LIMIT = 60 * 7.5
+BRAIN_TIME_LIMIT = 60 * 15
 
 HIDDEN_SIZE = 16
 OUTPUT_DELTA = 0.05
@@ -29,8 +29,6 @@ BODY_MAX_GENERATIONS = None
 BODY_TIME_LIMIT = 60 * 60 * 20  # in seconds
 UNIFORM_CROSSOVER = True
 BODY_BATCH_SIZE = 5
-
-BRAIN_STAGNATION = 8 # abandon brain training early if no improvement after this many generations
 
 DETAILED_LOGGING = False
 
@@ -46,18 +44,26 @@ STAGE_SETTINGS = {
     1: {
         "SECTIONED_MODE": True,
         "DURATION": 10,
+        "MAX_STAGNATION": 8,
+        "MAX_STAGNATION_DELTA": 0.0001,
     },
     2: {
         "SECTIONED_MODE": True,
         "DURATION": 30,
+        "MAX_STAGNATION": 5,
+        "MAX_STAGNATION_DELTA": 0.001,
     },
     3: {
         "SECTIONED_MODE": False,
         "DURATION": 90,
+        "MAX_STAGNATION": 4,
+        "MAX_STAGNATION_DELTA": 0.001,
     },
     "FULL": {
         "SECTIONED_MODE": False,
         "DURATION": 120,
+        "MAX_STAGNATION": 4,
+        "MAX_STAGNATION_DELTA": 0.001,
     },
 }
 

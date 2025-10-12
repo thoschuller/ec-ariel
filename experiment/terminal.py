@@ -23,7 +23,7 @@ log_file = open(LOG_PATH, "w", encoding="utf-8", buffering=1)
 
 dual_writer = DualWriter(sys.stdout, log_file)
 
-_console = Console(file=dual_writer)
+_console = Console(file=log_file)
 progress = Progress()
 
 class CustomConsole:
@@ -33,12 +33,10 @@ class CustomConsole:
         # If progress is started, use its console to log without interrupting the bar
         if progress.live and progress.live.is_started:
             progress.console.log(message)
-        else:
-            _console.log(message)
+        _console.log(message)
     def rule(self, *args: Any, **kwargs: Any) -> None:
         if progress.live and progress.live.is_started:
             progress.console.rule(*args, **kwargs)
-        else:
-            _console.rule(*args, **kwargs)
+        _console.rule(*args, **kwargs)
     
 console = CustomConsole()
