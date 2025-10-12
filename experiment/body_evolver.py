@@ -31,18 +31,25 @@ import evaluator as evaluator
 RNG = np.random.default_rng(constants.SEED)
 HPD = HighProbabilityDecoder(constants.NUM_OF_MODULES)
 NDE = NeuralDevelopmentalEncoding(number_of_modules=constants.NUM_OF_MODULES)
+GENOTYPE_SIZE = 64
 import session_runner as runner
 
 current_stage: int | str = 1
 def _create_individual() -> Individual:
+    """glorot initialization of body genotype, brain genotype is not initialized yet"""
     individual = Individual()
+    
+    limit = np.sqrt(6 / (64 + 64))
+    type_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
+    conn_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
+    rot_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
     
     individual.genotype = (
         numpy_tolist(
             [
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
-                RNG.random(64).astype(np.float32),
+                type_p_genes,
+                conn_p_genes,
+                rot_p_genes
             ]
         ),
         [],  # brain genotype will be set after training
