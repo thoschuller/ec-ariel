@@ -515,11 +515,13 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             writer = csv.writer(csvfile)
             writer.writerow(["generation", "fitness"])
 
+    
     ea.fetch_population()
     for ind in ea.population:
         with open(fitness_log_path, mode="a", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow([ea.current_generation, ind.fitness])
+    ea.commit_population()
 
     progress.start_task(evolution_task)
 
@@ -537,6 +539,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             with open(fitness_log_path, mode="a", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([ea.current_generation, ind.fitness])
+        ea.commit_population()
 
         console.log(
             f"Generation {ea.current_generation}: Best Fitness = {best_fitness:.4f}, Population Size = {ea.population_size}"
@@ -609,6 +612,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = 2
                 ea.fetch_population()
                 ea.population = reset_fitness(ea.population)
+                ea.commit_population()
 
 
         elif current_stage == 2:
@@ -626,6 +630,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = "FULL"
                 ea.fetch_population()
                 ea.population = reset_fitness(ea.population)
+                ea.commit_population()
 
 
         elif current_stage == "FULL":
@@ -642,6 +647,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = 3
                 ea.fetch_population()
                 ea.population = reset_fitness(ea.population)
+                ea.commit_population()
 
         elif current_stage == 3:
             # Stage 3: Full training (fitness >= 2). Lowered duration for faster iterations
@@ -654,7 +660,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
                 )
                 break
-        progress.update(evolution_task, completed=ea.current_generation if constants.BODY_MAX_GENERATIONS else (time.time() - start_time) if constants.BODY_TIME_LIMIT is not None else None)
+        progress.update(evolution_task, completed=ea.current_generation if constants.BODY_MAX_GENERATIONS else (time.time() - start_time) if constants.BODY_TIME_LIMIT is not None else None) # pyright: ignore[reportUnnecessaryComparison]
 
     progress.remove_task(evolution_task)
 

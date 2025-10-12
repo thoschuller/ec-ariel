@@ -1,6 +1,8 @@
 import constants
 from terminal import console, progress
 from utils import plot_saved_phenotype, plot_and_record_saved_phenotype
+from brain_train import train_individual_from_files
+from body_evolver import body_evolution
 
 if __name__ == "__main__":
     import argparse
@@ -43,9 +45,18 @@ if __name__ == "__main__":
         
         if args.evolve == "body":
             console.log("Running body evolution...")
-            from body_evolver import body_evolution
+            full_evolve_task = progress.add_task("Full Evolution Progress", total=None)
             result = body_evolution()
-            console.log(f"body_evolution() result: {result}")
+            fit, _, brain, body_graph = result
+            console.log(f"Body evolution returned fitness: {fit}")
+            console.rule(f"Body evolution completed. Best fitness: {fit}")
+            console.rule(f"Starting prolonged brain training on best body...")
+            brain_result = train_individual_from_files(body_file=body_graph, np_weights=brain, time_limit=constants.EXTRA_TRAINING_TIME)
+            console.log(f"Prolonged brain training returned: {brain_result[1]}")
+            console.rule(f"Prolonged brain training completed. Best fitness: {brain_result[1]}")
+            progress.remove_task(full_evolve_task)
+            
+            
         elif args.evolve == "brain":
             if not args.body:
                 console.log("[red] [ERROR] --body must be set for --evolve brain mode.")
