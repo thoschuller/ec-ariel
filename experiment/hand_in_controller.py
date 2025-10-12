@@ -19,7 +19,7 @@ WEIGHTS = load_brain_genotype("best_brain.npy")
 HIDDEN_SIZE = 16
 
         # Define controller callback
-def _controller_callback(m: mujoco.MjModel, d: mujoco.MjData) -> np.ndarray: # pyright: ignore[reportUnusedFunction]
+def controller_callback(m: mujoco.MjModel, d: mujoco.MjData) -> np.ndarray: # pyright: ignore[reportUnusedFunction]
     outputs = _controller(
         data=d,
         weights=WEIGHTS,
