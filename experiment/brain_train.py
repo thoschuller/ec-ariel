@@ -26,10 +26,13 @@ def train_individual_from_files( # pyright: ignore[reportUnknownParameterType]
         gecko_body=body_graph,
         duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
         sectioned=False,
-        stagnation_threshold=constants.STAGE_SETTINGS["FULL"]["MAX_STAGNATION_DELTA"],
-        max_stagnation=constants.STAGE_SETTINGS["FULL"]["MAX_STAGNATION"],
+        stagnation_threshold=0.0,
+        max_stagnation=np.inf,
+        record_batch=25,
         record_last=True,
-        initial_weights=weights
+        save_all=False,
+        initial_weights=weights,
+        time_limit=60*60*1
     )
     
 
@@ -49,7 +52,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
 
 
 def evolve_using_cma_es(
-    gecko_body: DiGraph, duration: float, sectioned: bool, stagnation_threshold: float, max_stagnation: int, record_batch: int = None, record_last: bool = False, initial_weights: np.ndarray | None = None # type:ignore
+    gecko_body: DiGraph, duration: float, sectioned: bool, stagnation_threshold: float, max_stagnation: int, record_batch: int = None, record_last: bool = False, initial_weights: np.ndarray | None = None, save_all: bool = False, time_limit: float = constants.BRAIN_TIME_LIMIT # type:ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Main evolutionary loop using CMA-ES. Returns (best_individual.genotype, best_fitness, best_tracker).
@@ -129,8 +132,8 @@ def evolve_using_cma_es(
 
         while not es.stop():
             if (
-                constants.BRAIN_TIME_LIMIT > 0
-                and (time.time() - evolution_start_time) > constants.BRAIN_TIME_LIMIT
+                time_limit > 0
+                and (time.time() - evolution_start_time) > time_limit
             ):
                 console.log("Time limit reached, terminating CMA-ES.")
                 break
@@ -174,6 +177,9 @@ def evolve_using_cma_es(
 
                 save_brain_genotype(np.array(es.result.xbest, dtype=np.float32), fitness=current_best_fitness, filename=f"brain_evo_gen{es.countiter}_best_brain")
                 save_xpos_history(tracker, fitness=current_best_fitness)
+                
+            if save_all:
+                save_brain_genotype(np.array(es.result.xbest, dtype=np.float32), fitness=current_best_fitness, filename=f"brain_evo_gen{es.countiter}_best_brain")
 
             progress.update(
                 brain_evo_task,

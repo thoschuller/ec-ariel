@@ -380,13 +380,11 @@ def mutate_individual(
         mutated_body_genotype.append(
             new_gene_array.astype(np.float32).tolist()
         )  # Convert back to list
-    mutated_individual = Individual()
-    mutated_individual.genotype = (mutated_body_genotype, None)
-    mutated_individual.requires_eval = True
-    mutated_individual.requires_init = True
-    mutated_individual.tags = individual.tags.copy()
-    mutated_individual.tags["mut"] = False
-    return mutated_individual
+    individual.genotype = (mutated_body_genotype, None)
+    individual.requires_eval = True
+    individual.requires_init = True
+    individual.tags["mut"] = False
+    return individual
 
 
 def mutate(
@@ -397,23 +395,19 @@ def mutate(
     """Mutate individuals tagged for mutation"""
     console.log("Starting mutation...")
     start_time = time.time()
-    new_population = []
     mutable_inds = [ind for ind in population if ind.tags.get("mut", False) == True]
     task = progress.add_task("[green]Mutating individuals...", total=len(mutable_inds))
     progress.start_task(task)
     for individual in mutable_inds:
-        mutated = mutate_individual(individual, mutation_probability, mutation_stddev)
-        new_population.append(mutated)
+        mutate_individual(individual, mutation_probability, mutation_stddev)
         progress.update(task, advance=1)
-    for individual in [ind for ind in population if not ind.tags.get("mut", False) == True]:
-        new_population.append(individual)
 
     progress.stop_task(task)
     task_time = time.time() - start_time
     progress.remove_task(task)
     console.log(f"Mutation completed in {task_time:.2f} seconds.")
 
-    return new_population
+    return population
 
 
 def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  # type: ignore
