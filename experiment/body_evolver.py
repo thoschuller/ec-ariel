@@ -508,6 +508,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if constants.BODY_MAX_GENERATIONS
             else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
         ),
+        start=False,
     )
 
     # Prepare CSV for logging fitness
@@ -529,6 +530,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         with open(fitness_log_path, mode="a", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow([ea.current_generation, ind.fitness])
+
+    progress.start_task(evolution_task)
 
     while not terminate():
         console.log(
