@@ -405,7 +405,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
-        EAStep("reset tags", reset_tags)
+        EAStep("reset tags", reset_tags),
         EAStep("evaluation", evaluate_population),
         # EAStep("show_best", show_best_of_population),
         EAStep("parent_selection", parent_selection),
