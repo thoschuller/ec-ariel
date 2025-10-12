@@ -10,7 +10,7 @@ if __name__ == "__main__":
     parser.add_argument("--evolve", choices=["body", "brain"], help="Evolve mode: 'body' or 'brain'.")
     parser.add_argument("--brain", type=str, help="Path to the brain .npy file (for plotting/recording).")
     parser.add_argument("--body", type=str, help="Path to the body .json file (for plotting/recording or brain evolution).")
-    parser.add_argument("--weights", type=str, help="Path to the weights file (for brain evolution, optional).")
+    parser.add_argument("--brain", type=str, help="Path to the weights file (for brain evolution, optional).")
     parser.add_argument(
         "--duration", type=float, default=constants.STAGE_SETTINGS["FULL"]["DURATION"], help="Duration of the simulation."
     )
@@ -47,7 +47,7 @@ if __name__ == "__main__":
             console.log("Running brain evolution...")
             from brain_train import train_individual_from_files
             # weights is optional
-            result = train_individual_from_files(body_file=args.body, weights_file=args.weights)
+            result = train_individual_from_files(body_file=args.body, weights_file=args.brain)
             console.log(f"result: {result}")
         else:
             if not args.brain or not args.body:
