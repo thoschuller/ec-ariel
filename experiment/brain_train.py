@@ -192,8 +192,7 @@ def evolve_using_cma_es(
                 description=f"CMA-ES Evolution Progress. Current best: {current_best_fitness}",
             )
 
-    finally:
-        progress.remove_task(brain_evo_task)        
+    finally:      
         if pool:
             pool.close()
             pool.join()
@@ -238,6 +237,8 @@ def evolve_using_cma_es(
         f"Total time spent evaluating: {time_spent_evaluating:.2f} seconds, {time_spent_evaluating/(time.time() - evolution_start_time)*100:.2f}% of total time."
     )
     console.log(f"Best fitness: {best_fitness:.5f}")
+    
+    progress.remove_task(brain_evo_task)  
 
     # Return as Individual for compatibility
     return best_weights.tolist(), best_fitness, tracker

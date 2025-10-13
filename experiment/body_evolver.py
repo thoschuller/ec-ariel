@@ -163,9 +163,9 @@ def reset_tags(population: Population) -> Population:
     return population
 
 def reset_fitness(population: Population) -> Population:
-    console.log("Re-evaluating ALL fitnesses")
+    console.log("Re-evaluating all fitnesses")
     eval_task = progress.add_task("Evaluating full population", total=len(population))
-    for ind in population:
+    for ind in [ind for ind in population if getattr(ind, "alive", True)]:
         retrain_individual(ind)
         ind.requires_eval = False
         progress.update(eval_task, advance=1)
@@ -180,8 +180,8 @@ def evaluate_population(population: Population) -> Population:
     start_time = time.time()
     new_population = []
     re_evaluated = 0
-    alive_pop = [ind for ind in population if getattr(ind, "alive", True)]
-    eval_inds = [ind for ind in alive_pop if ind.requires_eval == True]
+    _population = [ind for ind in population if getattr(ind, "alive", True)]
+    eval_inds = [ind for ind in _population if ind.requires_eval == True]
     console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
@@ -204,17 +204,19 @@ def parent_selection(population: Population) -> Population:
     # TODO: implement a better selection mechanism
     """Tournament selection"""
     console.log("Starting parent selection...")
-    task = progress.add_task("[green]Selecting parents...", total=len(population) // 2)
+    task = progress.add_task("[green]Selecting parents...", total=len(_population) // 2)
     start_time = time.time()
     progress.start_task(task)
+    
+    _population = [ind for ind in population if getattr(ind, "alive", True)]
 
     # Shuffle population to avoid bias
-    np.random.shuffle(population)
+    np.random.shuffle(_population)
 
     # Tournament selection
-    for idx in range(0, len(population) - 1, 2):
-        ind_i = population[idx]
-        ind_j = population[idx + 1]
+    for idx in range(0, len(_population) - 1, 2):
+        ind_i = _population[idx]
+        ind_j = _population[idx + 1]
 
         # Compare fitness values and update tags
         if ind_i.fitness > ind_j.fitness:
@@ -228,7 +230,7 @@ def parent_selection(population: Population) -> Population:
     task_time = time.time() - start_time
     progress.remove_task(task)
     console.log(f"Parent selection completed in {task_time:.2f} seconds.")
-    return population
+    return _population
 
 
 def survivor_selection(population: Population) -> Population:
@@ -345,7 +347,8 @@ def crossover(population: Population) -> Population:
 
     console.log("Starting crossover...")
     start_time = time.time()
-    parents = [ind for ind in population if ind.tags.get("ps", False) == True]
+    _population = population
+    parents = [ind for ind in _population if ind.tags.get("ps", False) == True]
 
     task = progress.add_task("[green]Crossover...", total=len(parents) // 2)
     progress.start_task(task)
@@ -355,7 +358,7 @@ def crossover(population: Population) -> Population:
         parent_i = parents[idx]
         parent_j = parents[idx + 1]
         child_i, child_j = crossover_individuals(parent_i, parent_j)
-        population.extend([child_i, child_j])
+        _population.extend([child_i, child_j])
         progress.update(task, advance=1)
         parent_i.tags["ps"] = False
         parent_j.tags["ps"] = False
@@ -363,7 +366,7 @@ def crossover(population: Population) -> Population:
     progress.remove_task(task)
     console.log(f"Crossover completed in {task_time:.2f} seconds.")
 
-    return population
+    return _population
 
 
 def mutate_individual(
@@ -396,7 +399,8 @@ def mutate(
     """Mutate individuals tagged for mutation"""
     console.log("Starting mutation...")
     start_time = time.time()
-    mutable_inds = [ind for ind in population if ind.tags.get("mut", False) == True]
+    _population = [ind for ind in population if getattr(ind, "alive", True)]
+    mutable_inds = [ind for ind in _population if ind.tags.get("mut", False) == True]
     task = progress.add_task("[green]Mutating individuals...", total=len(mutable_inds))
     progress.start_task(task)
     for individual in mutable_inds:
@@ -408,7 +412,7 @@ def mutate(
     progress.remove_task(task)
     console.log(f"Mutation completed in {task_time:.2f} seconds.")
 
-    return population
+    return _population
 
 def retrain_individual(individual: Individual) -> Individual:
     """retrain the brain of a single individual with current weights as initial weights"""
@@ -532,6 +536,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         )
         ea.step()
         best_ind = ea.get_solution("best", only_alive=False)
+        ea.fetch_population(only_alive=True)
         best_fitness = best_ind.fitness
         # Compute average fitness (only for alive individuals)
         ea.fetch_population()
@@ -580,7 +585,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             
             
         
-        if ea.current_generation % constants.BODY_BATCH_SIZE == 0 or ea.current_generation == 1:
+        if (ea.current_generation % constants.BODY_BATCH_SIZE == 0 or ea.current_generation == 1) and constants.BODY_EVO_RECORD_BATCH:
             console.log(
                 f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
             )
@@ -667,47 +672,69 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
 
     console.rule("Evolution process finished.")
     console.log(f"Best Fitness: {ea.get_solution("best", only_alive=False).fitness}")
+    ea.fetch_population(only_alive=True)
     console.log("Saving best individual...")
     p_matrices = NDE.forward(
         np.array(ea.get_solution("best", only_alive=False).genotype[0])
     )
+    ea.fetch_population(only_alive=True)
     hpd = HPD
     
     # record and save best individual
-    console.log("Recording best individual of the entire evolution...")
+    console.log("Saving best individual of the entire evolution...")
     utils.save_body_to_json(
         hpd.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
         ),
         filename=f"best_body_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
     )
+    ea.fetch_population(only_alive=True)
     utils.save_brain_genotype(
         np.array(ea.get_solution("best", only_alive=False).genotype[1]),
         filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npy",
     )
+    ea.fetch_population(only_alive=True)
+    
+    if constants.BODY_EVO_RECORD_LAST:
+        console.log(f"Recording best individual of the entire evolution...")
+        tracker = runner.run_bot_session(
+            method="record",
+            spawn_pos=constants.POSITIONS[0][0],
+            weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
+            gecko_body=
+                hpd.probability_matrices_to_graph(
+                    p_matrices[0], p_matrices[1], p_matrices[2]
+                
+            ),
+            options={
+                "filename": f"best_body_individual_final",
+                "fitness": ea.get_solution("best", only_alive=False).fitness,
+            },
+            duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+        )
+        ea.fetch_population(only_alive=True)
+    
+    console.log("Plotting and saving best individual's xpos history... ")
     tracker = runner.run_bot_session(
-        method="record",
-        spawn_pos=constants.POSITIONS[0][0],
+        method="headless",
         weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
         gecko_body=
             hpd.probability_matrices_to_graph(
                 p_matrices[0], p_matrices[1], p_matrices[2]
-            
-        ),
-        options={
-            "filename": f"best_body_individual_final",
-            "fitness": ea.get_solution("best", only_alive=False).fitness,
-        },
+            ),
         duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+        spawn_pos=constants.POSITIONS[0][0],
     )
     utils.save_xpos_history(
         tracker,
         fitness=ea.get_solution("best", only_alive=False).fitness,
     ) 
+    ea.fetch_population(only_alive=True)
 
     console.log("Evolution process completed.")
 
     final_ind = ea.get_solution("best", only_alive=False)
+    ea.fetch_population(only_alive=True)
     final_fit: float = final_ind.fitness
     final_body_genotype: list[list[float]] = cast(
         "list[list[float]]", final_ind.genotype[0]
