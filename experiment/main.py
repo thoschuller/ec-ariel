@@ -100,7 +100,8 @@ if __name__ == "__main__":
                     body_graph=body_graph,
                     np_weights=brain,
                     time_limit=constants.EXTRA_TRAINING_TIME,
-                    record_batch=True,
+                    record_batch=constants.BRAIN_EVO_RECORD_BATCH,
+                    record_last=constants.BRAIN_EVO_RECORD_LAST,
                 )
                 console.log(f"Prolonged brain training returned: {brain_result[1]}")
                 console.rule(

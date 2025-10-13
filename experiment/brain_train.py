@@ -19,7 +19,7 @@ from utils import (
 
 
 def train_individual_from_files(  # pyright: ignore[reportUnknownParameterType]
-    body_file: str | None = None, body_graph: DiGraph | None = None, weights_file: str | None = None, np_weights: np.ndarray | None = None, time_limit: float = 60 * 60 * 1, record_batch: bool = constants.BRAIN_EVO_RECORD_BATCH  # type: ignore
+    body_file: str | None = None, body_graph: DiGraph | None = None, weights_file: str | None = None, np_weights: np.ndarray | None = None, time_limit: float = 60 * 60 * 1, record_batch: bool = constants.BRAIN_EVO_RECORD_BATCH, record_last: bool = constants.BRAIN_EVO_RECORD_LAST  # type: ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Load a genotype and body structure from files for training or evaluation.

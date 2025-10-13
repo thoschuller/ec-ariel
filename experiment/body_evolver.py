@@ -244,6 +244,9 @@ def survivor_selection(population: Population) -> Population:
 
     # Iterate in pairs, never go out of bounds
     for idx in range(0, len(_population) - 1, 2):
+        if current_pop_size <= constants.BODY_POP_SIZE:
+            break
+        
         ind_i = _population[idx]
         ind_j = _population[idx + 1]
 
@@ -255,8 +258,7 @@ def survivor_selection(population: Population) -> Population:
 
         # Termination condition
         current_pop_size -= 1
-        if current_pop_size <= constants.BODY_POP_SIZE:
-            break
+        
 
     # Remove dead individuals to maintain population size
     survivors = [ind for ind in _population if getattr(ind, "alive", True)]
@@ -488,7 +490,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     ops = [
         EAStep("reset tags", reset_tags),
         EAStep("evaluation", evaluate_population),
-        # EAStep("show_best", show_best_of_population),
         EAStep("parent_selection", parent_selection),
         EAStep("crossover", crossover),
         EAStep("mutation", mutate),

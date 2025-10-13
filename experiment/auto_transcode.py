@@ -135,6 +135,9 @@ def has_encoder(name_substring: str) -> bool:
 
 
 # --- Transcoding ---
+
+# Global flag for deleting originals
+delete_old = False
 def build_ffmpeg_cmd(
     src: Path,
     dst: Path,
@@ -304,9 +307,15 @@ def process_if_needed(
         print(f"[skip] Not in target codecs {sorted(target_codecs)}: {path.name}")
         return
 
-    transcode(
+    result = transcode(
         path, target=target, outdir=outdir, crf=crf, preset=preset, two_pass=two_pass
     )
+    if result and delete_old:
+        try:
+            path.unlink()
+            print(f"[delete] Deleted original: {path}")
+        except Exception as e:
+            print(f"[warn] Could not delete original: {path} ({e})")
 
 
 class Handler(FileSystemEventHandler):
@@ -357,6 +366,11 @@ def main():
         description="Watch a directory and transcode legacy videos (mp4v/mjpeg, etc.) to HEVC (hvc1) or AV1 (av01) in MP4."
     )
     ap.add_argument(
+        "--delete-old",
+        action="store_true",
+        help="Delete original video after successful transcoding",
+    )
+    ap.add_argument(
         "watch_dir",
         nargs="?",
         default=".",
@@ -398,6 +412,9 @@ def main():
         help="Comma-separated video codecs to transcode (normalized). Example: 'mpeg4,mjpeg' or 'mp4v,msmpeg4v2'. Default: mp4v,mjpeg.",
     )
     args = ap.parse_args()
+    # Set global flag for deletion
+    global delete_old
+    delete_old = args.delete_old
 
     watch_dir = Path(args.watch_dir).resolve()
     outdir = Path(args.outdir).resolve() if args.outdir else None
