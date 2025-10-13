@@ -318,7 +318,7 @@ def crossover_individuals(
         for child in [child_i, child_j]:
             child.requires_init = True
             child.requires_eval = True
-            child.tags["mut"] = np.random.random() < 0.5
+            child.tags["mut"] = np.random.random() < 0.75
 
     ind1.tags["ps"] = False
     ind2.tags["ps"] = False
@@ -355,15 +355,15 @@ def crossover(population: Population) -> Population:
 
 def mutate_individual(
     individual: Individual,
-    mutation_probability: float = 0.5,
-    mutation_stddev: float = 0.1,
+    mutation_probability: float = 0.25,
+    mutation_stddev: float = 0.25,
 ) -> Individual:
     """Mutate an individual's body genotype with given probability and stddev"""
     body_genotype = cast("list[list[float]]", individual.genotype[0])
     mutated_body_genotype = []
     for gene_array in body_genotype:
         gene_array_np = np.array(gene_array, dtype=np.float32)  # Ensure numpy array
-        mutation_mask = RNG.random(gene_array_np.shape) > mutation_probability
+        mutation_mask = RNG.random(gene_array_np.shape) < mutation_probability
         mutations = RNG.normal(0, mutation_stddev, gene_array_np.shape)
         new_gene_array = gene_array_np + mutation_mask * mutations
         mutated_body_genotype.append(
@@ -377,8 +377,8 @@ def mutate_individual(
 
 def mutate(
     population: Population,
-    mutation_probability: float = 0.5,
-    mutation_stddev: float = 0.1,
+    mutation_probability: float = 0.25,
+    mutation_stddev: float = 0.25,
 ) -> Population:
     """Mutate individuals tagged for mutation"""
     console.log("Starting mutation...")
