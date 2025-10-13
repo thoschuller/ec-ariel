@@ -44,7 +44,7 @@ def train_individual_from_files(  # pyright: ignore[reportUnknownParameterType]
         save_all=False,
         initial_weights=weights,
         time_limit=time_limit,
-        plot_all_batches=True
+        plot_all_batches=True,
     )
 
 
@@ -63,7 +63,7 @@ def sample_glorot_flat(weight_shapes: list[tuple[int, int]]) -> np.ndarray:
 
 
 def evolve_using_cma_es(
-    gecko_body: DiGraph, # type: ignore
+    gecko_body: DiGraph,  # type: ignore
     duration: float,
     sectioned: bool,
     stagnation_threshold: float,

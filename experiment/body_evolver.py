@@ -4,6 +4,7 @@ from typing import cast
 import copy
 
 import numpy as np
+import csv
 
 # from mujoco import viewer
 
@@ -17,8 +18,6 @@ from ariel.ec.a003 import Population
 from ariel.ec.a004 import EAStep, EA
 from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 
-# from ariel.utils.tracker import Tracker
-# from ariel.simulation.controllers.controller import Controller
 import constants as constants
 from terminal import console, progress
 from networkx import DiGraph, is_isomorphic
@@ -34,92 +33,90 @@ GENOTYPE_SIZE = 64
 import session_runner as runner
 
 current_stage: int | str = 1
+
+
 def _create_individual() -> Individual:
     """glorot initialization of body genotype, brain genotype is not initialized yet"""
     individual = Individual()
-    
+
     limit = np.sqrt(6 / (64 + 64))
     type_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
     conn_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
     rot_p_genes = RNG.uniform(-limit, limit, GENOTYPE_SIZE)
-    
+
     individual.genotype = (
-        numpy_tolist(
-            [
-                type_p_genes,
-                conn_p_genes,
-                rot_p_genes
-            ]
-        ),
+        numpy_tolist([type_p_genes, conn_p_genes, rot_p_genes]),
         [],  # brain genotype will be set after training
     )
-    
+
     individual.requires_init = True
     individual.requires_eval = True
     return individual
 
 
-
-
 def _create_population(size: int) -> Population:
     """Create a population of individuals."""
-    creation_task = progress.add_task(
-        "[green]Creating individuals...", total=size
-    )
-    population = []        
+    creation_task = progress.add_task("[green]Creating individuals...", total=size)
+    population = []
     while len(population) < size:
         new_ind = _create_individual()
         unique = True
         gecko_body = HPD.probability_matrices_to_graph(
-                NDE.forward(np.array(new_ind.genotype[0]))[0],
-                NDE.forward(np.array(new_ind.genotype[0]))[1],
-                NDE.forward(np.array(new_ind.genotype[0]))[2],
-            )
-        for k in range(len(population)):  
+            NDE.forward(np.array(new_ind.genotype[0]))[0],
+            NDE.forward(np.array(new_ind.genotype[0]))[1],
+            NDE.forward(np.array(new_ind.genotype[0]))[2],
+        )
+        for k in range(len(population)):
             if population[k].genotype[0] == new_ind.genotype[0]:
-                console.log(f"Duplicate body genotype found with an existing individual. No sense in keeping both. Discarding individual and creating new.")
+                console.log(
+                    f"Duplicate body genotype found with an existing individual. No sense in keeping both. Discarding individual and creating new."
+                )
                 unique = False
-                break          
+                break
             p_matrices_k = NDE.forward(np.array(population[k].genotype[0]))
             gecko_body_k = HPD.probability_matrices_to_graph(
                 p_matrices_k[0], p_matrices_k[1], p_matrices_k[2]
             )
             if is_isomorphic(gecko_body, gecko_body_k):
-                console.log(f"Duplicate body phenotype found with an existing individual. No sense in keeping both. Discarding individual and creating new.")
+                console.log(
+                    f"Duplicate body phenotype found with an existing individual. No sense in keeping both. Discarding individual and creating new."
+                )
                 unique = False
                 break
         if unique:
             population.append(train_and_evaluate_individual(new_ind))
             progress.update(creation_task, advance=1)
-        
+
     progress.remove_task(creation_task)
     return population
+
 
 def train_and_evaluate_individual_brain(individual: Individual) -> Individual:
     """train the brain of a single individual, keep its body unchanged"""
     console.log("Starting brain training...")
-    
+
     p_matrices = NDE.forward(np.array(individual.genotype[0]))
     training_result = braintrain.evolve_using_cma_es(
-        gecko_body=
-            HPD.probability_matrices_to_graph(
-                p_matrices[0],
-                p_matrices[1],
-                p_matrices[2],
-            
+        gecko_body=HPD.probability_matrices_to_graph(
+            p_matrices[0],
+            p_matrices[1],
+            p_matrices[2],
         ),
         duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
         sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
-        stagnation_threshold=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION_DELTA"],
-        max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"]
+        stagnation_threshold=constants.STAGE_SETTINGS[current_stage][
+            "MAX_STAGNATION_DELTA"
+        ],
+        max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"],
     )
     individual.genotype = (individual.genotype[0], training_result[0])
     individual.fitness = training_result[1]
     individual.requires_eval = False
     individual.requires_init = False
-    
+
     console.log("Brain training completed.")
     return individual
+
 
 def train_and_evaluate_individual(individual: Individual) -> Individual:
     """train and evaluate a single individual, set its fitness attribute"""
@@ -128,39 +125,40 @@ def train_and_evaluate_individual(individual: Individual) -> Individual:
     individual.requires_eval = False
     return individual
 
+
 def evaluate_individual(individual: Individual) -> Individual:
     console.log("Evaluating individual...")
-    
+
     if individual.requires_init:
         individual = train_and_evaluate_individual_brain(individual)
         individual.requires_init = False
         individual.requires_eval = False
         return individual
-    
+
     p_matrices = NDE.forward(np.array(individual.genotype[0]))
-    result = evaluator.evaluate_individual(    
+    result = evaluator.evaluate_individual(
         genotype_list=individual.genotype[1],
-        gecko_body=
-            HPD.probability_matrices_to_graph(
-                p_matrices[0],
-                p_matrices[1],
-                p_matrices[2],
-            
+        gecko_body=HPD.probability_matrices_to_graph(
+            p_matrices[0],
+            p_matrices[1],
+            p_matrices[2],
         ),
         duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
-        sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"]
+        sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
     )
     individual.fitness = result
     individual.requires_eval = False
-    
+
     console.log(f"Individual evaluated with fitness: {individual.fitness}")
     return individual
+
 
 def reset_tags(population: Population) -> Population:
     for ind in population:
         ind.tags["mut"] = False
         ind.tags["ps"] = False
     return population
+
 
 def reset_fitness(population: Population) -> Population:
     console.log("Re-evaluating all fitnesses")
@@ -172,7 +170,6 @@ def reset_fitness(population: Population) -> Population:
     console.log("Finished evaluating full population")
     progress.remove_task(eval_task)
     return population
-    
 
 
 def evaluate_population(population: Population) -> Population:
@@ -208,7 +205,7 @@ def parent_selection(population: Population) -> Population:
     task = progress.add_task("[green]Selecting parents...", total=len(_population) // 2)
     start_time = time.time()
     progress.start_task(task)
-    
+
     _population = [ind for ind in population if getattr(ind, "alive", True)]
 
     # Shuffle population to avoid bias
@@ -238,7 +235,7 @@ def survivor_selection(population: Population) -> Population:
     console.log("Starting survivor selection...")
     task = progress.add_task("[green]Selecting survivors...")
     start_time = time.time()
-    
+
     _population = [ind for ind in population if getattr(ind, "alive", True)]
 
     # Shuffle population to avoid bias
@@ -274,7 +271,9 @@ def survivor_selection(population: Population) -> Population:
 
     task_time = time.time() - start_time
     progress.remove_task(task)
-    console.log(f"Population size was {len(_population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}")
+    console.log(
+        f"Population size was {len(_population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}"
+    )
     console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
 
     return survivors
@@ -305,7 +304,7 @@ def crossover_individuals(
     parent_j = ind2.model_copy(deep=True)
 
     # Decide which to crossover and which to clone directly
-    
+
     child_i = Individual()
     child_j = Individual()
 
@@ -315,8 +314,7 @@ def crossover_individuals(
             child.requires_eval = False
         child_j.genotype = parent_j.genotype
         child_j.fitness = parent_j.fitness
-        
-        
+
         child_i.genotype = parent_i.genotype
         child_i.fitness = parent_i.fitness
 
@@ -327,13 +325,13 @@ def crossover_individuals(
         )
         child_i.genotype = (body_genotype_i, None)
         child_j.genotype = (body_genotype_j, None)
-        
+
         for child in [child_i, child_j]:
             child.requires_init = True
             child.requires_eval = True
 
     for child in [child_i, child_j]:
-        if(np.random.random() < 0.5):
+        if np.random.random() < 0.5:
             child.tags["mut"] = True
 
     ind1.tags["ps"] = False
@@ -415,30 +413,31 @@ def mutate(
 
     return _population
 
+
 def retrain_individual(individual: Individual) -> Individual:
     """retrain the brain of a single individual with current weights as initial weights"""
     console.log("Starting brain retraining...")
-    
+
     if individual.requires_eval:
         individual = train_and_evaluate_individual_brain(individual)
         individual.requires_eval = False
         individual.requires_init = False
         return individual
-    
+
     p_matrices = NDE.forward(np.array(individual.genotype[0]))
     training_result = braintrain.evolve_using_cma_es(
-        gecko_body=
-            HPD.probability_matrices_to_graph(
-                p_matrices[0],
-                p_matrices[1],
-                p_matrices[2],
-            
+        gecko_body=HPD.probability_matrices_to_graph(
+            p_matrices[0],
+            p_matrices[1],
+            p_matrices[2],
         ),
         duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
         sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
-        stagnation_threshold=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION_DELTA"],
+        stagnation_threshold=constants.STAGE_SETTINGS[current_stage][
+            "MAX_STAGNATION_DELTA"
+        ],
         max_stagnation=constants.STAGE_SETTINGS[current_stage]["MAX_STAGNATION"],
-        initial_weights=np.array(individual.genotype[1], dtype=np.float32)
+        initial_weights=np.array(individual.genotype[1], dtype=np.float32),
     )
     individual.genotype = (individual.genotype[0], training_result[0])
     individual.fitness = training_result[1]
@@ -453,31 +452,38 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     """full evolution of body and brain genotypes
     returns fitness, body_genotype, brain_genotype, body_phenotype"""
     console.rule(f"Body evolution started.")
-    evolution_task = progress.add_task("[green]Evolving bodies...", total=(
-        constants.BODY_MAX_GENERATIONS
-        if constants.BODY_MAX_GENERATIONS
-        else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
-    ), start=False)
-    
-    global current_stage
-    
-    start_time = time.time()
+    evolution_task = progress.add_task(
+        "[green]Evolving bodies...",
+        total=(
+            constants.BODY_MAX_GENERATIONS
+            if constants.BODY_MAX_GENERATIONS
+            else constants.BODY_TIME_LIMIT if constants.BODY_TIME_LIMIT else None
+        ),
+        start=False,
+    )
 
+    global current_stage
+
+    start_time = time.time()
 
     # Create initial population
     console.rule("Creating initial population")
     population = _create_population(constants.BODY_POP_SIZE)
 
-    #DEBUG: Record full run and plot
+    # DEBUG: Record full run and plot
     random_ind_int = RNG.integers(0, len(population))
     random_ind = population[int(random_ind_int)]
     debug_p_matrices = NDE.forward(np.array(random_ind.genotype[0]))
     debug_gecko_body = HPD.probability_matrices_to_graph(*debug_p_matrices)
-    
-    console.log(f"Recording a random individual from initial population for debugging purposes...")
-    console.log(f"Parameters given: duration={constants.STAGE_SETTINGS['FULL']['DURATION']}, spawn_pos={constants.POSITIONS[0][0]}")
+
+    console.log(
+        f"Recording a random individual from initial population for debugging purposes..."
+    )
+    console.log(
+        f"Parameters given: duration={constants.STAGE_SETTINGS['FULL']['DURATION']}, spawn_pos={constants.POSITIONS[0][0]}"
+    )
     console.log(debug_gecko_body)
-    
+
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
         EAStep("reset tags", reset_tags),
@@ -507,13 +513,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             return True
         return False
 
-    # Prepare CSV for logging fitness
-    import csv
-
     fitness_log_path = (
-        constants.OUTPUT
-        / "logs"
-        / f"fitness_log-{time.strftime('%Y%m%d-%H%M%S')}.csv"
+        constants.OUTPUT / "logs" / f"fitness_log-{time.strftime('%Y%m%d-%H%M%S')}.csv"
     )
     # Write header if file does not exist
     if not fitness_log_path.exists():
@@ -521,7 +522,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             writer = csv.writer(csvfile)
             writer.writerow(["generation", "fitness"])
 
-    
     ea.fetch_population()
     for ind in [ind for ind in ea.population if getattr(ind, "alive", True)]:
         with open(fitness_log_path, mode="a", newline="") as csvfile:
@@ -532,9 +532,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     progress.start_task(evolution_task)
 
     while not terminate():
-        console.log(
-            f"Running evolution step for generation {ea.current_generation}..."
-        )
+        console.log(f"Running evolution step for generation {ea.current_generation}...")
         ea.step()
         best_ind = ea.get_solution("best", only_alive=False)
         ea.fetch_population(only_alive=True)
@@ -559,8 +557,10 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             ),
             description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}",
         )
-        
-        console.log(f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}...")
+
+        console.log(
+            f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}..."
+        )
         p_matrices = NDE.forward(np.array(best_ind.genotype[0]))
         gecko_body = HPD.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
@@ -583,10 +583,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             spawn_pos=constants.POSITIONS[0][0],
         )
         utils.save_xpos_history(tracker, fitness=best_fitness)
-            
-            
-        
-        if (ea.current_generation % constants.BODY_BATCH_SIZE == 0 or ea.current_generation == 1) and constants.BODY_EVO_RECORD_BATCH:
+
+        if (
+            ea.current_generation % constants.BODY_BATCH_SIZE == 0
+            or ea.current_generation == 1
+        ) and constants.BODY_EVO_RECORD_BATCH:
             console.log(
                 f"Running best individual of generation {ea.current_generation} with fitness {best_fitness:.4f} for recording..."
             )
@@ -611,16 +612,20 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 0.35
                 or (time.time() - start_time) > 0.2 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
+                or (
+                    constants.BODY_MAX_GENERATIONS is not None # pyright: ignore[reportUnnecessaryComparison]
+                    and ea.current_generation >= 0.2 * constants.BODY_MAX_GENERATIONS
+                )  # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 2."
                 )
                 current_stage = 2
                 ea.fetch_population()
-                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
+                ea.population = reset_fitness(
+                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                )
                 ea.commit_population()
-
 
         elif current_stage == 2:
             # Stage 2: Sectioned training (fitness >= 0.25). Higher duration
@@ -629,16 +634,20 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 0.75
                 or (time.time() - start_time) > 0.4 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
+                or (
+                    constants.BODY_MAX_GENERATIONS is not None # pyright: ignore[reportUnnecessaryComparison]
+                    and ea.current_generation >= 0.6 * constants.BODY_MAX_GENERATIONS
+                )  # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached sectioned fitness threshold 2 with fitness {best_fitness:.4f}. Switching to stage FULL - LENGTH."
                 )
                 current_stage = "FULL"
                 ea.fetch_population()
-                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
+                ea.population = reset_fitness(
+                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                )
                 ea.commit_population()
-
 
         elif current_stage == "FULL":
             # Stage Full training (fitness >= 1). High duration
@@ -646,28 +655,42 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             if (
                 best_fitness >= 2
                 or (time.time() - start_time) > 0.8 * constants.BODY_TIME_LIMIT
-                or (constants.BODY_MAX_GENERATIONS is not None and ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS) # pyright: ignore[reportUnnecessaryComparison]
+                or (
+                    constants.BODY_MAX_GENERATIONS is not None # pyright: ignore[reportUnnecessaryComparison]
+                    and ea.current_generation >= 0.8 * constants.BODY_MAX_GENERATIONS
+                )  # pyright: ignore[reportUnnecessaryComparison]
             ):
                 console.rule(
                     f"Reached full fitness threshold 1 with fitness {best_fitness:.4f}. Switching to stage 3."
                 )
                 current_stage = 3
                 ea.fetch_population()
-                ea.population = reset_fitness([ind for ind in ea.population if getattr(ind, "alive", True)])
+                ea.population = reset_fitness(
+                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                )
                 ea.commit_population()
 
         elif current_stage == 3:
             # Stage 3: Full training (fitness >= 2). Lowered duration for faster iterations
             # 2 = reached goal, up to 3 for time bonus
             # at 2.5 fitness, the bots reach the end in 27 seconds
-            if (
-                best_fitness >= 2.9
-            ):
+            if best_fitness >= 2.9:
                 console.rule(
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
                 )
                 break
-        progress.update(evolution_task, completed=ea.current_generation if constants.BODY_MAX_GENERATIONS else (time.time() - start_time) if constants.BODY_TIME_LIMIT is not None else None) # pyright: ignore[reportUnnecessaryComparison]
+        progress.update(
+            evolution_task,
+            completed=(
+                ea.current_generation
+                if constants.BODY_MAX_GENERATIONS
+                else (
+                    (time.time() - start_time)
+                    if constants.BODY_TIME_LIMIT is not None # pyright: ignore[reportUnnecessaryComparison]
+                    else None
+                )
+            ),
+        )  # pyright: ignore[reportUnnecessaryComparison]
 
     progress.remove_task(evolution_task)
 
@@ -680,13 +703,11 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     )
     ea.fetch_population(only_alive=True)
     hpd = HPD
-    
+
     # record and save best individual
     console.log("Saving best individual of the entire evolution...")
     utils.save_body_to_json(
-        hpd.probability_matrices_to_graph(
-            p_matrices[0], p_matrices[1], p_matrices[2]
-        ),
+        hpd.probability_matrices_to_graph(p_matrices[0], p_matrices[1], p_matrices[2]),
         filename=f"best_body_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}",
     )
     ea.fetch_population(only_alive=True)
@@ -695,17 +716,15 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npy",
     )
     ea.fetch_population(only_alive=True)
-    
+
     if constants.BODY_EVO_RECORD_LAST:
         console.log(f"Recording best individual of the entire evolution...")
         tracker = runner.run_bot_session(
             method="record",
             spawn_pos=constants.POSITIONS[0][0],
             weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-            gecko_body=
-                hpd.probability_matrices_to_graph(
-                    p_matrices[0], p_matrices[1], p_matrices[2]
-                
+            gecko_body=hpd.probability_matrices_to_graph(
+                p_matrices[0], p_matrices[1], p_matrices[2]
             ),
             options={
                 "filename": f"best_body_individual_final",
@@ -714,22 +733,21 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
         )
         ea.fetch_population(only_alive=True)
-    
+
     console.log("Plotting and saving best individual's xpos history... ")
     tracker = runner.run_bot_session(
         method="headless",
         weights=np.array(ea.get_solution("best", only_alive=False).genotype[1]),
-        gecko_body=
-            hpd.probability_matrices_to_graph(
-                p_matrices[0], p_matrices[1], p_matrices[2]
-            ),
+        gecko_body=hpd.probability_matrices_to_graph(
+            p_matrices[0], p_matrices[1], p_matrices[2]
+        ),
         duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
         spawn_pos=constants.POSITIONS[0][0],
     )
     utils.save_xpos_history(
         tracker,
         fitness=ea.get_solution("best", only_alive=False).fitness,
-    ) 
+    )
     ea.fetch_population(only_alive=True)
 
     console.log("Evolution process completed.")
@@ -747,6 +765,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         p_matrices[0], p_matrices[1], p_matrices[2]
     )
     return final_fit, final_body_genotype, final_brain_genotype, final_graph
+
 
 if __name__ == "__main__":
     progress.start()
