@@ -24,9 +24,9 @@ OUTPUT_DELTA = 0.05
 LATERAL_PENALTY_FACTOR = 0.25
 NUM_HIDDEN_LAYERS = 1
 
-BODY_POP_SIZE = 6
+BODY_POP_SIZE = 10
 BODY_MAX_GENERATIONS = None
-BODY_TIME_LIMIT = 60 * 60 * 32.5  # in seconds
+BODY_TIME_LIMIT = 60 * 60 * 30.5  # in seconds
 UNIFORM_CROSSOVER = True
 BODY_BATCH_SIZE = 1
 
@@ -41,7 +41,7 @@ BRAIN_EVO_RECORD_LAST = True
 PARALLEL = True
 DEVICE = "cpu"
 PARALLEL_CORES = (
-    multiprocessing.cpu_count() - 1 if multiprocessing.cpu_count() > 1 else 1
+    multiprocessing.cpu_count() if multiprocessing.cpu_count() > 1 else 1
 )
 
 NUM_OF_MODULES = 30

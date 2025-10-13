@@ -569,7 +569,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                     "filename": f"best_body_individual_gen{ea.current_generation}",
                     "fitness": best_fitness,
                 },
-                duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+                duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
                 spawn_pos=constants.POSITIONS[0][0],
             )
 
@@ -699,7 +699,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 "filename": f"best_body_individual_final",
                 "fitness": ea.get_solution("best", only_alive=False).fitness,
             },
-            duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],
+            duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
         )
         ea.fetch_population(only_alive=True)
 
