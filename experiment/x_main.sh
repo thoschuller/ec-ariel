@@ -1,3 +1,4 @@
 pushd "$(dirname "$0")"
+source ../.venv/bin/activate
 xvfb-run -s "-screen 0 1400x900x24" uv run --python 3.13 /projects/ec-ariel/experiment/main.py "$@"
 popd
