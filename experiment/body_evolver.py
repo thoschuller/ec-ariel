@@ -393,7 +393,7 @@ def mutate(
     progress.stop_task(task)
     task_time = time.time() - start_time
     progress.remove_task(task)
-    console.log(f"Mutation completed in {task_time:.2f} seconds.")
+    console.log(f"Mutation for {len(mutable_inds)} individuals completed in {task_time:.2f} seconds.")
 
     return population
 
