@@ -12,9 +12,6 @@ from ariel.utils.renderers import single_frame_renderer
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-TARGET_POSITION = constants.POSITIONS[2][1]
-SPAWN_POS = constants.POSITIONS[0][0]
-
 # Type Checking
 from networkx import DiGraph
 from ariel.utils.tracker import Tracker
@@ -306,13 +303,6 @@ def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: f
     Loads a saved brain and body, runs a single simulation with video recording, and plots the result.
     """
     try:
-        # Load brain weights and body graph
-        weights = load_brain_genotype(brain_file)
-        body_graph = load_json_as_digraph(body_file)
-
-        # Import run_bot_session here to avoid circular imports
-        from session_runner import run_bot_session
-
         # Use default spawn position from constants
         spawn_pos = constants.POSITIONS[0][0]
 
@@ -320,22 +310,15 @@ def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: f
         options = {}
         if video_filename:
             options["video_filename"] = video_filename
-
-        # Run a single simulation with recording
-        tracker = run_bot_session(
-            weights=weights,
-            method="record",
-            gecko_body=body_graph,
-            duration=duration,
-            spawn_pos=spawn_pos,
-            options=options,
-        )
+            
+        tracker = run_saved_phenotype(brain_file=brain_file, body_file=body_file, duration=duration, method="record", options=options)
 
         # Compute fitness if possible (optional, can be None)
-        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=constants.POSITIONS[2][1], bonus=True)
 
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
+        console.log(f"Plotted and recorded saved phenotype. With fitness: {fitness}")
     except Exception as e:
         msg = f"[red] [ERROR] Exception in plot_and_record_saved_phenotype: {e}"
         console.log(f"[red] [ERROR] Failed to plot and record saved phenotype: {e}[/red]")
@@ -345,10 +328,11 @@ def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: f
         import sys
         sys.stdout.flush()
 
-def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], method: str = "headless") -> None:
+def run_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], method: str = "headless", options: dict[str, Any] = None) -> Tracker:
     """
-    Loads a saved brain and body, runs a single simulation, and plots the result.
+    Loads a saved brain and body, runs a single simulation without plotting.
     """
+    tracker = Tracker()  # Default empty tracker in case of failure
     try:
         # Load brain weights and body graph
         weights = load_brain_genotype(brain_file)
@@ -367,14 +351,34 @@ def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = cons
             gecko_body=body_graph,
             duration=duration,
             spawn_pos=spawn_pos,
+            options=options,
         )
+        console.log(f"Simulation completed.")
+    except Exception as e:
+        msg = f"[red] [ERROR] Exception in run_saved_phenotype: {e}"
+        console.log(f"[red] [ERROR] Failed to run saved phenotype: {e}[/red]")
+        console.log(msg)
+        import traceback
+        traceback.print_exc()
+        import sys
+        sys.stdout.flush()
+        
+    return tracker
+
+def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], method: str = "headless") -> None:
+    """
+    Loads a saved brain and body, runs a single simulation, and plots the result.
+    """
+    try:
+
+        tracker = run_saved_phenotype(brain_file=brain_file, body_file=body_file, duration=duration, method=method)
 
         # Compute fitness if possible (optional, can be None)
-        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+        fitness = evaluator.fitness(tracker, spawn=constants.POSITIONS[0][0], goal=constants.POSITIONS[2][1], bonus=True)
 
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
-        console.log(tracker.history)
+        console.log(f"Plotted saved phenotype. With fitness: {fitness}")
     except Exception as e:
         msg = f"[red] [ERROR] Exception in plot_saved_phenotype: {e}[/red]"
         console.log(f"[red] [ERROR] Failed to plot saved phenotype: {e}[/red]")

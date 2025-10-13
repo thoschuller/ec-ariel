@@ -51,7 +51,7 @@ if __name__ == "__main__":
             console.log(f"Body evolution returned fitness: {fit}")
             console.rule(f"Body evolution completed. Best fitness: {fit}")
             console.rule(f"Starting prolonged brain training on best body...")
-            brain_result = train_individual_from_files(body_graph=body_graph, np_weights=brain, time_limit=constants.EXTRA_TRAINING_TIME)
+            brain_result = train_individual_from_files(body_graph=body_graph, np_weights=brain, time_limit=constants.EXTRA_TRAINING_TIME, record_batch=True)
             console.log(f"Prolonged brain training returned: {brain_result[1]}")
             console.rule(f"Prolonged brain training completed. Best fitness: {brain_result[1]}")
             progress.remove_task(full_evolve_task)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             console.log("Running brain evolution...")
             from brain_train import train_individual_from_files
             # weights is optional
-            result = train_individual_from_files(body_file=args.body, weights_file=args.brain)
+            result = train_individual_from_files(body_file=args.body, weights_file=args.brain, record_batch=True)
             console.log(f"result: {result}")
         else:
             if not args.brain or not args.body:

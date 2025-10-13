@@ -34,8 +34,8 @@ class CustomConsole:
     def log(self, message: str) -> None:
         # If progress is started, use its console to log without interrupting the bar
         if progress.live and progress.live.is_started:
-            progress.console.log(message)
-        _console.log(message)
+            progress.console.log(message, _stack_offset=2)
+        _console.log(message, _stack_offset=2)
     def rule(self, *args: Any, **kwargs: Any) -> None:
         if progress.live and progress.live.is_started:
             progress.console.rule(*args, **kwargs)

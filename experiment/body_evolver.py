@@ -204,6 +204,7 @@ def parent_selection(population: Population) -> Population:
     # TODO: implement a better selection mechanism
     """Tournament selection"""
     console.log("Starting parent selection...")
+    _population = [ind for ind in population if getattr(ind, "alive", True)]
     task = progress.add_task("[green]Selecting parents...", total=len(_population) // 2)
     start_time = time.time()
     progress.start_task(task)
