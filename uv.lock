@@ -234,6 +234,7 @@ version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "deap" },
+    { name = "ipykernel" },
     { name = "jupyter" },
     { name = "keyboard" },
     { name = "line-profiler" },
@@ -310,6 +311,7 @@ stubs = [
 [package.metadata]
 requires-dist = [
     { name = "deap", specifier = ">=1.4.3" },
+    { name = "ipykernel", specifier = ">=6.30.1" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "keyboard", specifier = ">=0.13.5" },
     { name = "line-profiler", specifier = ">=5.0.0" },
