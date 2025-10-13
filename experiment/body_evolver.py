@@ -25,7 +25,6 @@ from networkx import DiGraph, is_isomorphic
 from utils import numpy_tolist
 import brain_train as braintrain
 import utils as utils
-from rich import pretty
 import evaluator as evaluator
 
 RNG = np.random.default_rng(constants.SEED)
@@ -724,7 +723,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
 if __name__ == "__main__":
     progress.start()
     try:
-        pretty.install()
         body_evolution()
     finally:
         progress.stop()

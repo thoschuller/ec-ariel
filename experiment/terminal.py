@@ -4,6 +4,8 @@ from rich.console import Console
 from rich.progress import Progress
 from typing import Any
 import constants
+from rich import pretty
+
 
 LOG_PATH = constants.OUTPUT / "logs" / f"evolver-{time.strftime('%Y%m%d-%H%M%S')}.txt"
 
@@ -40,3 +42,5 @@ class CustomConsole:
         _console.rule(*args, **kwargs)
     
 console = CustomConsole()
+
+pretty.install(console=console)
