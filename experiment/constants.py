@@ -50,7 +50,7 @@ STAGE_SETTINGS = {
     1: {
         "SECTIONED_MODE": True,
         "DURATION": 15,
-        "MAX_STAGNATION": 5,
+        "MAX_STAGNATION": 15,
         "MAX_STAGNATION_DELTA": 0.0001,
     },
     2: {
@@ -63,13 +63,13 @@ STAGE_SETTINGS = {
         "SECTIONED_MODE": False,
         "DURATION": 90,
         "MAX_STAGNATION": 10,
-        "MAX_STAGNATION_DELTA": 0.001,
+        "MAX_STAGNATION_DELTA": 0.0001,
     },
     "FULL": {
         "SECTIONED_MODE": False,
         "DURATION": 120,
         "MAX_STAGNATION": 6,
-        "MAX_STAGNATION_DELTA": 0.001,
+        "MAX_STAGNATION_DELTA": 0.0001,
     },
 }
 
