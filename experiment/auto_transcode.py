@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# THIS IS NOT PART OF THE ASSIGNMENT AND REPORT
+
 import argparse
 import json
 import os

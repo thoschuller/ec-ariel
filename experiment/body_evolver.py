@@ -175,46 +175,40 @@ def reset_fitness(population: Population) -> Population:
 def evaluate_population(population: Population) -> Population:
     """evaluate a population of individuals"""
     start_time = time.time()
-    new_population = []
     re_evaluated = 0
-    _population = [ind for ind in population if getattr(ind, "alive", True)]
-    eval_inds = [ind for ind in _population if ind.requires_eval == True]
+    eval_inds = [ind for ind in population if ind.requires_eval == True and getattr(ind, "alive", True)]
     console.log(f"Starting population evaluation for {len(eval_inds)} individuals...")
     evaluation_task = progress.add_task(
         "[green]Evaluating individuals...", total=len(eval_inds)
     )
     for individual in eval_inds:
-        new_population.append(evaluate_individual(individual))
+        individual = evaluate_individual(individual)
         re_evaluated += 1
         progress.update(evaluation_task, advance=1)
-    for individual in [ind for ind in population if ind.requires_eval == False]:
-        new_population.append(individual)
     evaluation_time = time.time() - start_time
     console.log(
-        f"Re-evaluated {re_evaluated}/{len(population)} individuals in {evaluation_time:.2f} seconds."
+        f"Re-evaluated {re_evaluated} individuals in {evaluation_time:.2f} seconds."
     )
     progress.remove_task(evaluation_task)
-    return new_population
+    return population
 
 
 def parent_selection(population: Population) -> Population:
     # TODO: implement a better selection mechanism
     """Tournament selection"""
     console.log("Starting parent selection...")
-    _population = [ind for ind in population if getattr(ind, "alive", True)]
-    task = progress.add_task("[green]Selecting parents...", total=len(_population) // 2)
+    alive_population = [ind for ind in population if getattr(ind, "alive", True)]
+    task = progress.add_task("[green]Selecting parents...", total=len(population) // 2)
     start_time = time.time()
     progress.start_task(task)
 
-    _population = [ind for ind in population if getattr(ind, "alive", True)]
-
     # Shuffle population to avoid bias
-    np.random.shuffle(_population)
+    np.random.shuffle(alive_population)
 
     # Tournament selection
-    for idx in range(0, len(_population) - 1, 2):
-        ind_i = _population[idx]
-        ind_j = _population[idx + 1]
+    for idx in range(0, len(alive_population) - 1, 2):
+        ind_i = alive_population[idx]
+        ind_j = alive_population[idx + 1]
 
         # Compare fitness values and update tags
         if ind_i.fitness > ind_j.fitness:
@@ -228,57 +222,52 @@ def parent_selection(population: Population) -> Population:
     task_time = time.time() - start_time
     progress.remove_task(task)
     console.log(f"Parent selection completed in {task_time:.2f} seconds.")
-    return _population
+    return population
 
 
 def survivor_selection(population: Population) -> Population:
     console.log("Starting survivor selection...")
     task = progress.add_task("[green]Selecting survivors...")
     start_time = time.time()
-
-    _population = [ind for ind in population if getattr(ind, "alive", True)]
+    
+    alive_population = [ind for ind in population if getattr(ind, "alive", True)]
 
     # Shuffle population to avoid bias
-    np.random.shuffle(_population)
-    current_pop_size = len(_population)
+    current_pop_size = len(alive_population)
 
     # Iterate in pairs, never go out of bounds
-    for idx in range(0, len(_population) - 1, 2):
-        if current_pop_size <= constants.BODY_POP_SIZE:
-            break
-        
-        ind_i = _population[idx]
-        ind_j = _population[idx + 1]
+    while(current_pop_size > constants.BODY_POP_SIZE):
+        np.random.shuffle(alive_population)
+        for idx in range(0, len(alive_population) - 1, 2):
+            if current_pop_size <= constants.BODY_POP_SIZE:
+                for ind in [ind for ind in alive_population]:
+                    ind.alive = True
+                break
+            
+            ind_i = alive_population[idx]
+            ind_j = alive_population[idx + 1]
 
-        # Kill worse individual
-        if ind_i.fitness > ind_j.fitness:
-            ind_j.alive = False
-        else:
-            ind_i.alive = False
+            # Kill worse individual
+            if ind_i.fitness > ind_j.fitness:
+                ind_j.alive = False
+                alive_population.remove(ind_j)
+                ind_i.alive = True
+            else:
+                ind_i.alive = False
+                alive_population.remove(ind_i)
+                ind_j.alive = True
 
-        # Termination condition
-        current_pop_size -= 1
-        
+            # Termination condition
+            current_pop_size -= 1
 
-    # Remove dead individuals to maintain population size
-    survivors = [ind for ind in _population if getattr(ind, "alive", True)]
-    # If too many, trim to POP_SIZE
-    if len(survivors) > constants.BODY_POP_SIZE:
-        survivors.sort(key=lambda ind: ind.fitness, reverse=True)
-        survivors = survivors[: constants.BODY_POP_SIZE]
-
-    for ind in _population:
-        if ind not in survivors:
-            ind.alive = False
 
     task_time = time.time() - start_time
     progress.remove_task(task)
-    console.log(
-        f"Population size was {len(_population)}, is now {len(survivors)} out of {constants.BODY_POP_SIZE}"
-    )
+    console.log(f"Alive individuals after selection: {len([ind for ind in population if getattr(ind, 'alive', False) == True])}")
     console.log(f"Survivor selection completed in {task_time:.2f} seconds.")
 
-    return survivors
+    return population
+
 
 
 class Crossover:
@@ -302,9 +291,6 @@ class Crossover:
 def crossover_individuals(
     ind1: Individual, ind2: Individual
 ) -> tuple[Individual, Individual]:
-    parent_i = ind1.model_copy(deep=True)
-    parent_j = ind2.model_copy(deep=True)
-
     # Decide which to crossover and which to clone directly
 
     child_i = Individual()
@@ -314,16 +300,17 @@ def crossover_individuals(
         for child in [child_i, child_j]:
             child.requires_init = False
             child.requires_eval = False
-        child_j.genotype = parent_j.genotype
-        child_j.fitness = parent_j.fitness
+            child.tags["mut"] = True
+        child_j.genotype = copy.deepcopy(ind1.genotype)
+        child_j.fitness = copy.deepcopy(ind1.fitness)
 
-        child_i.genotype = parent_i.genotype
-        child_i.fitness = parent_i.fitness
+        child_i.genotype = copy.deepcopy(ind2.genotype)
+        child_i.fitness = copy.deepcopy(ind2.fitness)
 
     else:
         body_genotype_i, body_genotype_j = Crossover.uniform(
-            cast("list[list[float]]", parent_i.genotype[0]),
-            cast("list[list[float]]", parent_j.genotype[0]),
+            copy.deepcopy(cast("list[list[float]]", ind1.genotype[0])),
+            copy.deepcopy(cast("list[list[float]]", ind2.genotype[0])),
         )
         child_i.genotype = (body_genotype_i, None)
         child_j.genotype = (body_genotype_j, None)
@@ -331,10 +318,7 @@ def crossover_individuals(
         for child in [child_i, child_j]:
             child.requires_init = True
             child.requires_eval = True
-
-    for child in [child_i, child_j]:
-        if np.random.random() < 0.5:
-            child.tags["mut"] = True
+            child.tags["mut"] = np.random.random() < 0.5
 
     ind1.tags["ps"] = False
     ind2.tags["ps"] = False
@@ -348,8 +332,7 @@ def crossover(population: Population) -> Population:
 
     console.log("Starting crossover...")
     start_time = time.time()
-    _population = population
-    parents = [ind for ind in _population if ind.tags.get("ps", False) == True]
+    parents = [ind for ind in population if ind.tags.get("ps", False) == True and getattr(ind, "alive", True)]
 
     task = progress.add_task("[green]Crossover...", total=len(parents) // 2)
     progress.start_task(task)
@@ -359,7 +342,7 @@ def crossover(population: Population) -> Population:
         parent_i = parents[idx]
         parent_j = parents[idx + 1]
         child_i, child_j = crossover_individuals(parent_i, parent_j)
-        _population.extend([child_i, child_j])
+        population.extend([child_i, child_j])
         progress.update(task, advance=1)
         parent_i.tags["ps"] = False
         parent_j.tags["ps"] = False
@@ -367,7 +350,7 @@ def crossover(population: Population) -> Population:
     progress.remove_task(task)
     console.log(f"Crossover completed in {task_time:.2f} seconds.")
 
-    return _population
+    return population
 
 
 def mutate_individual(
@@ -400,8 +383,7 @@ def mutate(
     """Mutate individuals tagged for mutation"""
     console.log("Starting mutation...")
     start_time = time.time()
-    _population = [ind for ind in population if getattr(ind, "alive", True)]
-    mutable_inds = [ind for ind in _population if ind.tags.get("mut", False) == True]
+    mutable_inds = [ind for ind in population if ind.tags.get("mut", False) == True and getattr(ind, "alive", True)]
     task = progress.add_task("[green]Mutating individuals...", total=len(mutable_inds))
     progress.start_task(task)
     for individual in mutable_inds:
@@ -413,7 +395,7 @@ def mutate(
     progress.remove_task(task)
     console.log(f"Mutation completed in {task_time:.2f} seconds.")
 
-    return _population
+    return population
 
 
 def retrain_individual(individual: Individual) -> Individual:

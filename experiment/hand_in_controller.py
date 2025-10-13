@@ -2,6 +2,8 @@ import numpy as np
 import mujoco
 from pathlib import Path
 
+# THIS IS ONLY FOR THE OLYMPIC CHALLENGE HAND-IN
+
 def load_brain_genotype(file_path: str) -> np.ndarray:
     """
     Loads a genotype (numpy network weights) from a .npy file.
