@@ -10,6 +10,7 @@ from terminal import console
 import session_runner as runner
 from networkx import DiGraph
 
+
 def fitness(
     tracker: Tracker,
     spawn: list[float],
@@ -21,18 +22,24 @@ def fitness(
     history = tracker.history
     if not history:
         raise ValueError("No history data available from tracker.")
-    
+
     # Check if required key exists
     if "xpos" not in history:
-        raise ValueError(f"Missing 'xpos' key in history. Available keys: {list(history.keys())}")
-    
+        raise ValueError(
+            f"Missing 'xpos' key in history. Available keys: {list(history.keys())}"
+        )
+
     # Get the position data for the first tracked object (index 0)
     if 0 not in history["xpos"]:
-        raise ValueError(f"No tracked object at index 0. Available indices: {list(history['xpos'].keys())}")
-    
+        raise ValueError(
+            f"No tracked object at index 0. Available indices: {list(history['xpos'].keys())}"
+        )
+
     xpos_data = history["xpos"][0]
     if len(xpos_data) < 2:
-        raise ValueError(f"Insufficient position history data: only {len(xpos_data)} entries.")
+        raise ValueError(
+            f"Insufficient position history data: only {len(xpos_data)} entries."
+        )
 
     if spawn[1] != goal[1]:
         raise NotImplementedError("Goals with lateral displacement not supported yet.")
@@ -76,7 +83,7 @@ def fitness(
 
 def evaluate_individual(
     genotype_list: list[float],
-    gecko_body: DiGraph, # pyright: ignore
+    gecko_body: DiGraph,  # pyright: ignore
     duration: float,
     sectioned: bool = False,
 ) -> float:
@@ -103,10 +110,12 @@ def evaluate_individual(
                     )
                     fitnesses.append(fit)
                 except Exception as e:
-                    console.log(f"Fitness calculation failed for section {spawn} to {goal}: {e}")
+                    console.log(
+                        f"Fitness calculation failed for section {spawn} to {goal}: {e}"
+                    )
                     fitnesses.append(-10000.0)
                     break
-            return np.mean(fitnesses) if fitnesses else -1000.0 #type: ignore
+            return np.mean(fitnesses) if fitnesses else -1000.0  # type: ignore
 
         tracker = runner.run_bot_session(
             weights,
@@ -122,10 +131,11 @@ def evaluate_individual(
             bonus=True,
         )
 
-        return fit+1
+        return fit + 1
     except Exception as e:
         console.log(f"Evaluation failed for individual: {type(e).__name__}: {str(e)}")
         import traceback
+
         console.log(f"Traceback: {traceback.format_exc()}")
         return -1000.0
     finally:
@@ -134,7 +144,7 @@ def evaluate_individual(
 
 def minimized_fitness_evaluation(
     genotype_list: list[float],
-    gecko_body: DiGraph, # pyright: ignore
+    gecko_body: DiGraph,  # pyright: ignore
     duration: float,
     sectioned: bool = False,
 ) -> float:

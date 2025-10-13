@@ -12,13 +12,11 @@ from ariel.utils.renderers import single_frame_renderer
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-TARGET_POSITION = constants.POSITIONS[2][1]
-SPAWN_POS = constants.POSITIONS[0][0]
-
 # Type Checking
 from networkx import DiGraph
 from ariel.utils.tracker import Tracker
 import evaluator as evaluator
+
 
 def save_brain_genotype(
     weights: np.ndarray, fitness: float = 0.0, filename: str = None
@@ -47,7 +45,9 @@ def load_brain_genotype(file_path: str) -> np.ndarray:
     return weights
 
 
-def save_body_to_json(gecko_graph: DiGraph, filename: str = None) -> None: # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType]
+def save_body_to_json(
+    gecko_graph: DiGraph, filename: str = None # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType]
+) -> None:  
     """
     Saves the body structure to a JSON file for visualization.
     """
@@ -73,6 +73,7 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             msg = "[red] [ERROR] No valid positions to plot in xpos history. Skipping plot."
             console.log(msg)
             import sys
+
             sys.stdout.flush()
             return
         valid_pos_data = pos_data[finite_mask]
@@ -185,7 +186,9 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
             for i in range(1, len(valid_pos_data)):
                 position = valid_pos_data[i]
                 distance = np.abs(np.array(position - last_value)) / 2
-                distance_as_size = f'"{(distance[0] + 0.01):.2f} 0.05 {(distance[2] + 0.01):.2f}"'
+                distance_as_size = (
+                    f'"{(distance[0] + 0.01):.2f} 0.05 {(distance[2] + 0.01):.2f}"'
+                )
                 path_box = rf"""
                 <mujoco>
                     <worldbody>
@@ -251,11 +254,12 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
 
         # Title
         plt.title(
-            "Robot Path in XY Plane - Fitness: " + (f"{fitness:.4f}" if fitness else "N/A")
+            "Robot Path in XY Plane - Fitness: "
+            + (f"{fitness:.4f}" if fitness else "N/A")
         )
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        filename =  f"fit_{fitness:.4f}_xpos_history_{timestamp}.png"
+        filename = f"fit_{fitness:.4f}_xpos_history_{timestamp}.png"
 
         # Show results
         plt.savefig(plots_dir / filename)
@@ -266,11 +270,11 @@ def save_xpos_history(tracker: Tracker, fitness: float = None) -> None:
         console.log(f"[red]Failed to save xpos history plot: {e}[/red]")
         console.log(msg)
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.stdout.flush()
-
-
 
 
 def numpy_tolist(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] | Any:
@@ -285,8 +289,11 @@ def numpy_tolist(obj: Any) -> list[Any] | tuple[Any, ...] | dict[Any, Any] | Any
         return {k: numpy_tolist(v) for k, v in obj.items()}
     else:
         return obj
-    
-def load_json_as_digraph(file_path: str) -> DiGraph: # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType]
+
+
+def load_json_as_digraph( # pyright: ignore[reportUnknownParameterType]
+    file_path: str,  
+) -> DiGraph:   # pyright: ignore[reportMissingTypeArgument]
     """
     Load a body structure from a JSON file and convert it to a DiGraph.
     """
@@ -301,18 +308,17 @@ def load_json_as_digraph(file_path: str) -> DiGraph: # pyright: ignore[reportMis
     console.log(f"Loaded body structure from {file_path}")
     return graph
 
-def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], video_filename: str = None) -> None:
+
+def plot_and_record_saved_phenotype(
+    brain_file: str,
+    body_file: str,
+    duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"],
+    video_filename: str = None,
+) -> None:
     """
     Loads a saved brain and body, runs a single simulation with video recording, and plots the result.
     """
     try:
-        # Load brain weights and body graph
-        weights = load_brain_genotype(brain_file)
-        body_graph = load_json_as_digraph(body_file)
-
-        # Import run_bot_session here to avoid circular imports
-        from session_runner import run_bot_session
-
         # Use default spawn position from constants
         spawn_pos = constants.POSITIONS[0][0]
 
@@ -321,34 +327,47 @@ def plot_and_record_saved_phenotype(brain_file: str, body_file: str, duration: f
         if video_filename:
             options["video_filename"] = video_filename
 
-        # Run a single simulation with recording
-        tracker = run_bot_session(
-            weights=weights,
-            method="record",
-            gecko_body=body_graph,
+        tracker = run_saved_phenotype(
+            brain_file=brain_file,
+            body_file=body_file,
             duration=duration,
-            spawn_pos=spawn_pos,
+            method="record",
             options=options,
         )
 
         # Compute fitness if possible (optional, can be None)
-        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+        fitness = evaluator.fitness(
+            tracker, spawn=spawn_pos, goal=constants.POSITIONS[2][1], bonus=True
+        )
 
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
+        console.log(f"Plotted and recorded saved phenotype. With fitness: {fitness}")
     except Exception as e:
         msg = f"[red] [ERROR] Exception in plot_and_record_saved_phenotype: {e}"
-        console.log(f"[red] [ERROR] Failed to plot and record saved phenotype: {e}[/red]")
+        console.log(
+            f"[red] [ERROR] Failed to plot and record saved phenotype: {e}[/red]"
+        )
         console.log(msg)
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.stdout.flush()
 
-def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"], method: str = "headless") -> None:
+
+def run_saved_phenotype(
+    brain_file: str,
+    body_file: str,
+    duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"],
+    method: str = "headless",
+    options: dict[str, Any] = None,
+) -> Tracker:
     """
-    Loads a saved brain and body, runs a single simulation, and plots the result.
+    Loads a saved brain and body, runs a single simulation without plotting.
     """
+    tracker = Tracker()  # Default empty tracker in case of failure
     try:
         # Load brain weights and body graph
         weights = load_brain_genotype(brain_file)
@@ -367,21 +386,56 @@ def plot_saved_phenotype(brain_file: str, body_file: str, duration: float = cons
             gecko_body=body_graph,
             duration=duration,
             spawn_pos=spawn_pos,
+            options=options,
+        )
+        console.log(f"Simulation completed.")
+    except Exception as e:
+        msg = f"[red] [ERROR] Exception in run_saved_phenotype: {e}"
+        console.log(f"[red] [ERROR] Failed to run saved phenotype: {e}[/red]")
+        console.log(msg)
+        import traceback
+
+        traceback.print_exc()
+        import sys
+
+        sys.stdout.flush()
+
+    return tracker
+
+
+def plot_saved_phenotype(
+    brain_file: str,
+    body_file: str,
+    duration: float = constants.STAGE_SETTINGS["FULL"]["DURATION"],
+    method: str = "headless",
+) -> None:
+    """
+    Loads a saved brain and body, runs a single simulation, and plots the result.
+    """
+    try:
+
+        tracker = run_saved_phenotype(
+            brain_file=brain_file, body_file=body_file, duration=duration, method=method
         )
 
         # Compute fitness if possible (optional, can be None)
-        fitness = evaluator.fitness(tracker, spawn=spawn_pos, goal=TARGET_POSITION, bonus=True)
+        fitness = evaluator.fitness(
+            tracker,
+            spawn=constants.POSITIONS[0][0],
+            goal=constants.POSITIONS[2][1],
+            bonus=True,
+        )
 
         # Plot the result
         save_xpos_history(tracker, fitness=fitness)
-        console.log(tracker.history)
+        console.log(f"Plotted saved phenotype. With fitness: {fitness}")
     except Exception as e:
         msg = f"[red] [ERROR] Exception in plot_saved_phenotype: {e}[/red]"
         console.log(f"[red] [ERROR] Failed to plot saved phenotype: {e}[/red]")
         console.log(msg)
         import traceback
+
         traceback.print_exc()
         import sys
-        sys.stdout.flush()
-    
 
+        sys.stdout.flush()

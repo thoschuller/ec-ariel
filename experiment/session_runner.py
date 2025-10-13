@@ -41,10 +41,11 @@ def quick_spawn(
     mujoco.mj_resetData(model, data)
     return (cast("mujoco.MjModel", model), data, world)
 
+
 def run_bot_session(
     weights: np.ndarray,
     method: str,
-    gecko_body: DiGraph, # pyright: ignore
+    gecko_body: DiGraph,  # pyright: ignore
     duration: float,
     spawn_pos: list[float],
     options: dict[str, str | float] | None = None,
@@ -57,7 +58,7 @@ def run_bot_session(
     mujoco.set_mjcb_control(None)
 
     model, data, world = quick_spawn(construct_mjspec_from_graph(gecko_body), spawn_pos)
-    
+
     tracker = Tracker(
         mujoco_obj_to_find=mujoco.mjtObj.mjOBJ_GEOM,
         name_to_bind="core",
@@ -109,7 +110,7 @@ def run_bot_session(
                 fps=30,
             )
             # Choose a safe body to track for the camera
-            #DEBUG: Causing issues right now, switched from tracking to non-tracking
+            # DEBUG: Causing issues right now, switched from tracking to non-tracking
             video_renderer(
                 model,
                 data,
@@ -131,9 +132,12 @@ def run_bot_session(
     # Convert tracker history to expected format
     return tracker
 
+
 class RandomNN:
-    def __init__(self, robot: DiGraph) -> None: # pyright: ignore
-        _, data, _ = quick_spawn(gecko_body=construct_mjspec_from_graph(robot), spawn_pos=[0, 0, 0])
+    def __init__(self, robot: DiGraph) -> None:  # pyright: ignore
+        _, data, _ = quick_spawn(
+            gecko_body=construct_mjspec_from_graph(robot), spawn_pos=[0, 0, 0]
+        )
 
         # Get relevant info
         self.input_size = len(data.qpos.copy())
@@ -188,6 +192,7 @@ class RandomNN:
         # Scale the outputs
         return outputs * np.pi
 
+
 def _controller(
     data: mujoco.MjData,
     weights: np.ndarray,
@@ -211,11 +216,13 @@ def _controller(
 
         ws = []
         for i in range(len(weight_shapes)):
-            ws.append(weights[indices[i]:indices[i + 1]].reshape(weight_shapes[i]))
-            
+            ws.append(weights[indices[i] : indices[i + 1]].reshape(weight_shapes[i]))
+
     except ValueError as e:
         console.log(f"[red] [ERROR] Weight reshaping error: {e}")
-        console.log(f"[red] [ERROR] Weights length: {len(weights)}, Expected total params: {sum(weight_sizes)}")
+        console.log(
+            f"[red] [ERROR] Weights length: {len(weights)}, Expected total params: {sum(weight_sizes)}"
+        )
         console.log(f"[red] [ERROR] Layer sizes: {layer_sizes}")
         console.log(f"[red] [ERROR] Weight shapes: {weight_shapes}")
         console.log(f"[red] [ERROR] Weight sizes: {weight_sizes}")
