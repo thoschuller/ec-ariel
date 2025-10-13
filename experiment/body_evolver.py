@@ -454,20 +454,6 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     console.rule("Creating initial population")
     population = _create_population(constants.BODY_POP_SIZE)
 
-    # DEBUG: Record full run and plot
-    random_ind_int = RNG.integers(0, len(population))
-    random_ind = population[int(random_ind_int)]
-    debug_p_matrices = NDE.forward(np.array(random_ind.genotype[0]))
-    debug_gecko_body = HPD.probability_matrices_to_graph(*debug_p_matrices)
-
-    console.log(
-        f"Recording a random individual from initial population for debugging purposes..."
-    )
-    console.log(
-        f"Parameters given: duration={constants.STAGE_SETTINGS['FULL']['DURATION']}, spawn_pos={constants.POSITIONS[0][0]}"
-    )
-    console.log(debug_gecko_body)
-
     console.log(f"Initial population created with {len(population)} individuals.")
     ops = [
         EAStep("reset tags", reset_tags),

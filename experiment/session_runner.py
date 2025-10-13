@@ -105,7 +105,7 @@ def run_bot_session(
             video_recorder = VideoRecorder(
                 output_folder=video_path,
                 file_name=video_file,
-                width=1200,
+                width=320,
                 height=960,
                 fps=30,
             )
@@ -116,6 +116,9 @@ def run_bot_session(
                 data,
                 duration=10 + run_duration,
                 video_recorder=video_recorder,
+                cam_fovy=8,
+                cam_pos=[2.1, 0, 50],
+                cam_quat=[-0.7071, 0, 0, 0.7071],
             )
             mujoco.set_mjcb_control(None)
             console.log(f"Recorded episode saved to {video_path}/{video_file}")
