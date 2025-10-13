@@ -674,7 +674,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     hpd = HPD
     
     # record and save best individual
-    console.log("Recording best individual of the entire evolution...")
+    console.log("Saving best individual of the entire evolution...")
     utils.save_body_to_json(
         hpd.probability_matrices_to_graph(
             p_matrices[0], p_matrices[1], p_matrices[2]
@@ -685,6 +685,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         np.array(ea.get_solution("best", only_alive=False).genotype[1]),
         filename=f"best_brain_weights_final_fit{ea.get_solution('best', only_alive=False).fitness:.4f}.npy",
     )
+    console.log(f"Recording best individual of the entire evolution...")
     tracker = runner.run_bot_session(
         method="record",
         spawn_pos=constants.POSITIONS[0][0],
