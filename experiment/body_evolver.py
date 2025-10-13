@@ -552,7 +552,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             completed=(
                 ea.current_generation if constants.BODY_MAX_GENERATIONS else runtime
             ),
-            description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}, runtime: {runtime // 3600}h {(runtime % 3600) // 60}m {(runtime % 60):.0f}s",
+            description=f"[green]Evolving bodies... Generation {ea.current_generation}, Best Fitness: {best_fitness:.4f}",
         )
         
         console.log(f"Saving best individual of generation {ea.current_generation} with fitness {best_fitness:.4f}...")

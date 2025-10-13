@@ -13,7 +13,7 @@ from networkx import DiGraph
 from utils import save_brain_genotype, save_xpos_history, load_brain_genotype, load_json_as_digraph
 
 def train_individual_from_files( # pyright: ignore[reportUnknownParameterType]
-    body_file: str, weights_file: str | None = None, np_weights: np.ndarray | None = None, time_limit: float = 60*60*1
+    body_file: str | None = None, body_graph: DiGraph | None = None, weights_file: str | None = None, np_weights: np.ndarray | None = None, time_limit: float = 60*60*1 # type: ignore
 ) -> tuple[list[float], float, Tracker | None]:
     """
     Load a genotype and body structure from files for training or evaluation.
@@ -23,7 +23,10 @@ def train_individual_from_files( # pyright: ignore[reportUnknownParameterType]
         weights = np_weights
     elif weights_file is not None:
         weights = load_brain_genotype(weights_file)
-    body_graph = load_json_as_digraph(body_file)
+    if body_graph is None and body_file is not None:
+        body_graph = load_json_as_digraph(body_file)
+    elif body_graph is None:
+        raise ValueError("Either body_graph or body_file must be provided.")
     return evolve_using_cma_es(
         gecko_body=body_graph,
         duration=constants.STAGE_SETTINGS["FULL"]["DURATION"],

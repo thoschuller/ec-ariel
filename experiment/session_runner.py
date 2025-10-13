@@ -206,10 +206,20 @@ def _controller(
     ]
     weight_sizes = [a * b for a, b in weight_shapes]
     indices = np.cumsum([0] + weight_sizes)
-    ws = [
-        weights[indices[i] : indices[i + 1]].reshape(weight_shapes[i])
-        for i in range(len(weight_shapes))
-    ]
+
+    try:
+
+        ws = []
+        for i in range(len(weight_shapes)):
+            ws.append(weights[indices[i]:indices[i + 1]].reshape(weight_shapes[i]))
+            
+    except ValueError as e:
+        console.log(f"[red] [ERROR] Weight reshaping error: {e}")
+        console.log(f"[red] [ERROR] Weights length: {len(weights)}, Expected total params: {sum(weight_sizes)}")
+        console.log(f"[red] [ERROR] Layer sizes: {layer_sizes}")
+        console.log(f"[red] [ERROR] Weight shapes: {weight_shapes}")
+        console.log(f"[red] [ERROR] Weight sizes: {weight_sizes}")
+        raise ValueError("Weight reshaping failed.")
 
     # Forward pass
     inputs = data.qpos
