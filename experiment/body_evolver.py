@@ -492,7 +492,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
         if time.time() - start_time >= constants.BODY_TIME_LIMIT:
             console.log("Reached time limit.")
             return True
-        if (CWD / "STOP_BODY").is_file():
+        if (constants.CWD / "STOP_BODY").is_file():
             console.log("STOP_BODY file detected. Terminating evolution.")
             return True
         return False
