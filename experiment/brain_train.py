@@ -160,6 +160,10 @@ def evolve_using_cma_es(
             if time_limit > 0 and (time.time() - evolution_start_time) > time_limit:
                 console.log("Time limit reached, terminating CMA-ES.")
                 break
+            
+            if (CWD / "STOP_BODY").is_file():
+                console.log("STOP_BRAIN file detected. Terminating evolution.")
+                break
 
             solutions = es.ask()
 

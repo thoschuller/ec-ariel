@@ -160,11 +160,23 @@ def reset_tags(population: Population) -> Population:
     return population
 
 
-def reset_fitness(population: Population) -> Population:
+def reset_fitness(population: Population, retrain: bool = False) -> Population:
     console.log("Re-evaluating all fitnesses")
     eval_task = progress.add_task("Evaluating full population", total=len(population))
-    for ind in [ind for ind in population if getattr(ind, "alive", True)]:
-        retrain_individual(ind)
+    for ind in [ind for ind in population if ind.alive == True]:
+        if retrain:
+            retrain_individual(ind)
+        else:
+            p_matrices = NDE.forward(np.array(ind.genotype[0]))
+            t_mat, c_mat, r_mat = p_matrices
+            ind.fitness = evaluator.evaluate_individual(
+                genotype_list=ind.genotype[1],
+                gecko_body=HPD.probability_matrices_to_graph(
+                    t_mat, c_mat, r_mat
+                ),
+                duration=constants.STAGE_SETTINGS[current_stage]["DURATION"],
+                sectioned=constants.STAGE_SETTINGS[current_stage]["SECTIONED_MODE"],
+            )
         ind.requires_eval = False
         progress.update(eval_task, advance=1)
     console.log("Finished evaluating full population")
@@ -370,7 +382,7 @@ def mutate_individual(
             new_gene_array.astype(np.float32).tolist()
         )  # Convert back to list
     individual.genotype = (mutated_body_genotype, individual.genotype[1])
-    retrain_individual(individual)
+    train_and_evaluate_individual(individual)
     individual.tags["mut"] = False
     return individual
 
@@ -479,6 +491,9 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             return True
         if time.time() - start_time >= constants.BODY_TIME_LIMIT:
             console.log("Reached time limit.")
+            return True
+        if (CWD / "STOP_BODY").is_file():
+            console.log("STOP_BODY file detected. Terminating evolution.")
             return True
         return False
 
@@ -592,7 +607,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = 2
                 ea.fetch_population()
                 ea.population = reset_fitness(
-                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                    [ind for ind in ea.population if getattr(ind, "alive", True)],
+                    retrain=False,
                 )
                 ea.commit_population()
 
@@ -614,7 +630,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = "FULL"
                 ea.fetch_population()
                 ea.population = reset_fitness(
-                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                    [ind for ind in ea.population if getattr(ind, "alive", True)],
+                    retrain=True,
                 )
                 ea.commit_population()
 
@@ -635,7 +652,8 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
                 current_stage = 3
                 ea.fetch_population()
                 ea.population = reset_fitness(
-                    [ind for ind in ea.population if getattr(ind, "alive", True)]
+                    [ind for ind in ea.population if getattr(ind, "alive", True)],
+                    retrain=False,
                 )
                 ea.commit_population()
 
@@ -643,7 +661,7 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
             # Stage 3: Full training (fitness >= 2). Lowered duration for faster iterations
             # 2 = reached goal, up to 3 for time bonus
             # at 2.5 fitness, the bots reach the end in 27 seconds
-            if best_fitness >= 2.9:
+            if best_fitness >= 2.5:
                 console.rule(
                     f"Reached full fitness threshold 2 with fitness {best_fitness:.4f}. Ending evolution."
                 )
