@@ -15,7 +15,7 @@ SEED = 42
 SEGMENT_LENGTH = 250
 
 BRAIN_POP_SIZE = 38
-BRAIN_MAX_GENERATIONS = None
+BRAIN_MAX_GENERATIONS = None # set to None to train until time limit, but was set to 1200 for matching random baseline iterations
 BRAIN_BATCH_SIZE = 50
 BRAIN_TIME_LIMIT = 60 * 15
 
@@ -25,7 +25,7 @@ LATERAL_PENALTY_FACTOR = 0.25
 NUM_HIDDEN_LAYERS = 1
 
 BODY_POP_SIZE = 10
-BODY_MAX_GENERATIONS = None
+BODY_MAX_GENERATIONS = None # set to None to train until time limit, but was set to 97 for matching random baseline iterations
 BODY_TIME_LIMIT = 60 * 60 * 25.5  # in seconds
 UNIFORM_CROSSOVER = True
 BODY_BATCH_SIZE = 1
@@ -37,6 +37,8 @@ BODY_EVO_RECORD_BATCH = True
 BODY_EVO_RECORD_LAST = True
 BRAIN_EVO_RECORD_BATCH = True
 BRAIN_EVO_RECORD_LAST = True
+
+RANDOM_BASELINE = False
 
 PARALLEL = True
 DEVICE = "cpu"

@@ -89,7 +89,10 @@ if __name__ == "__main__":
                     "Full Evolution Progress", total=None
                 )
                 from body_evolver import body_evolution
-                from brain_train import train_individual_from_files
+                if constants.RANDOM_BASELINE:
+                    from fake_brain_train import train_individual_from_files
+                else:
+                    from brain_train import train_individual_from_files
 
                 result = body_evolution()
                 fit, _, brain, body_graph = result
@@ -116,7 +119,10 @@ if __name__ == "__main__":
                     )
                     sys.exit(1)
                 console.log("Running brain evolution...")
-                from brain_train import train_individual_from_files
+                if constants.RANDOM_BASELINE:
+                    from fake_brain_train import train_individual_from_files
+                else:
+                    from brain_train import train_individual_from_files
 
                 # weights is optional
                 result = train_individual_from_files(

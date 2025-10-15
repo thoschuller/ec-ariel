@@ -22,7 +22,10 @@ import constants as constants
 from terminal import console, progress
 from networkx import DiGraph, is_isomorphic
 from utils import numpy_tolist
-import brain_train as braintrain
+if constants.RANDOM_BASELINE:
+    import fake_brain_train as braintrain
+else:
+    import brain_train as braintrain
 import utils as utils
 import evaluator as evaluator
 
@@ -35,7 +38,7 @@ import session_runner as runner
 current_stage: int | str = 1
 
 
-def _create_individual() -> Individual:
+def create_individual() -> Individual:
     """glorot initialization of body genotype, brain genotype is not initialized yet"""
     individual = Individual()
 
@@ -59,7 +62,7 @@ def _create_population(size: int) -> Population:
     creation_task = progress.add_task("[green]Creating individuals...", total=size)
     population = []
     while len(population) < size:
-        new_ind = _create_individual()
+        new_ind = create_individual()
         unique = True
         gecko_body = HPD.probability_matrices_to_graph(
             NDE.forward(np.array(new_ind.genotype[0]))[0],
@@ -444,6 +447,12 @@ def retrain_individual(individual: Individual) -> Individual:
     return individual
 
 
+def kill_all(population: Population) -> Population:
+    for ind in population:
+        ind.alive = False
+    return population
+
+
 def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  # type: ignore
     """full evolution of body and brain genotypes
     returns fitness, body_genotype, brain_genotype, body_phenotype"""
@@ -467,15 +476,23 @@ def body_evolution() -> tuple[float, list[list[float]], np.ndarray, DiGraph]:  #
     population = _create_population(constants.BODY_POP_SIZE)
 
     console.log(f"Initial population created with {len(population)} individuals.")
-    ops = [
-        EAStep("reset tags", reset_tags),
-        EAStep("evaluation", evaluate_population),
-        EAStep("parent_selection", parent_selection),
-        EAStep("crossover", crossover),
-        EAStep("mutation", mutate),
-        EAStep("evaluation", evaluate_population),
-        EAStep("survivor_selection", survivor_selection),
-    ]
+    
+    if constants.RANDOM_BASELINE:
+        ops = [
+            EAStep("reset tags", reset_tags),
+            EAStep("evaluation", evaluate_population),
+            EAStep("survivor_selection", survivor_selection),
+        ]
+    else:
+        ops = [
+            EAStep("reset tags", reset_tags),
+            EAStep("evaluation", evaluate_population),
+            EAStep("parent_selection", parent_selection),
+            EAStep("crossover", crossover),
+            EAStep("mutation", mutate),
+            EAStep("evaluation", evaluate_population),
+            EAStep("survivor_selection", survivor_selection),
+        ]
     ea = EA(
         population=population,
         operations=ops,
