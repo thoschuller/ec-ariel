@@ -15,7 +15,7 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
 )
 from ariel.ec.a001 import Individual
 from ariel.ec.a003 import Population
-from ariel.ec.a004 import EAStep, EA
+from a004 import EAStep, EA
 from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 
 import constants as constants
